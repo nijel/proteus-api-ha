@@ -1,10 +1,14 @@
 {
   "domain": "proteus",
   "name": "Proteus API",
-  "version": "0.1.0",
+  "config_flow": true,
   "documentation": "https://proteus.deltagreen.cz",
   "requirements": [],
-  "codeowners": ["@radekbus"],
+  "ssdp": [],
+  "zeroconf": [],
+  "homekit": {},
   "dependencies": [],
+  "codeowners": ["@RadekBuš"],
   "iot_class": "cloud_polling"
+  "version": "0.1.0",
 }
