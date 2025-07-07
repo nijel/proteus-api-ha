@@ -1,0 +1,15 @@
+{
+  "name": "Proteus API",
+  "content_in_root": true,
+  "domains": ["sensor", "binary_sensor", "rest_command"],
+  "homeassistant": "2023.5.0",
+  "hacs": "1.18.0",
+  "version": "0.1.0",
+  "zip_release": true,
+  "changelog": "https://github.com/Busak007/proteus-api/releases/tag/v1.0.0",
+  "description": "Integrace pro čtení dat z Proteus API.",
+  "keywords": ["proteus", "energy", "sensor", "api"],
+  "authors": ["RadekBus"],
+  "issue_tracker": "https://github.com/Busak007/proteus-api/issues",
+  "privacy": "public"
+}
