@@ -1,9 +1,0 @@
-{
-  "name": "Proteus API",
-  "content_in_root": true,
-  "domains": ["sensor", "binary_sensor"],
-  "homeassistant": "2023.5.0",
-  "version": "1.0.0",
-  "release_manifest": "manifest.json",
-  "zip_release": true
-}
