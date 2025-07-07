@@ -70,10 +70,11 @@ class ProteusFlexibilityStatusSensor(ProteusBaseSensor):
     _attr_icon = "mdi:lightning-bolt"
 
     @property
-    def native_value(self) -> str | None:
-        """Return the state of the sensor."""
+    def native_value(self):
+        """Return the native value of the sensor."""
+        if self.coordinator.data is None:
+            return None
         return self.coordinator.data.get("flexibility_state")
-
 
 class ProteusModeSensor(ProteusBaseSensor):
     """Mode sensor."""
