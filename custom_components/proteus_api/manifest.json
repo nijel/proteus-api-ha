@@ -1,7 +1,7 @@
 {
   "domain": "proteus_api",
   "name": "Proteus API",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "documentation": "https://github.com/Busak007/proteus-api",
   "issue_tracker": "https://github.com/Busak007/proteus-api/issues",
   "dependencies": [],
