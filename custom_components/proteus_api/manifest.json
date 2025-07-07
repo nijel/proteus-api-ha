@@ -1,6 +1,6 @@
 {
   "domain": "proteus",
-  "name": "Proteus Inverter",
+  "name": "Proteus API",
   "version": "0.1.0",
   "documentation": "https://proteus.deltagreen.cz",
   "requirements": [],
