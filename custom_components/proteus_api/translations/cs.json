@@ -1,0 +1,27 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Nastavení Proteus API",
+        "description": "Zadejte údaje pro připojení k Proteus API",
+        "data": {
+          "inverter_id": "ID invertoru",
+          "session_cookie": "Session cookie"
+        },
+        "data_description": {
+          "inverter_id": "ID invertoru z URL (např. z https://proteus.deltagreen.cz/cs/device/inverter/XXX)",
+          "session_cookie": "Session cookie z vývojářských nástrojů prohlížeče (F12)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Nelze se připojit k Proteus API",
+      "invalid_auth": "Neplatné přihlašovací údaje",
+      "unknown": "Neočekávaná chyba"
+    },
+    "abort": {
+      "already_configured": "Zařízení je již nakonfigurováno"
+    }
+  },
+  "title": "Proteus API"
+}
