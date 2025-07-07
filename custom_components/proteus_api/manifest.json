@@ -1,0 +1,10 @@
+{
+  "domain": "proteus_api",
+  "name": "Proteus API",
+  "version": "0.1.0",
+  "config_flow": true,
+  "documentation": "https://github.com/Busak007/proteus-api",
+  "requirements": [],
+  "codeowners": ["@Busak007"],
+  "iot_class": "cloud_polling"
+}
