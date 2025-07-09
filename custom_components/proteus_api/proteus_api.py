@@ -59,7 +59,11 @@ class ProteusAPI:
                     data = await response.json()
                     return self._parse_data(data)
                 else:
-                    _LOGGER.error("API request failed with status %s", response.status)
+                    try:
+                        data = await response.json()
+                        _LOGGER.error("API request failed with status %s (%s)", response.status, data)
+                    except Exception:
+                        _LOGGER.error("API request failed with status %s", response.status)
                     return None
                     
         except Exception as ex:
