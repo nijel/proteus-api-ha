@@ -48,7 +48,8 @@ class ProteusAPI:
                 }
             }
 
-            async with session.post(
+            # Authenticate
+            async with self._session.post(
                 f"{API_BASE_URL}{API_LOGIN_ENDPOINT}",
                 json=payload,
             ) as response:
@@ -61,10 +62,10 @@ class ProteusAPI:
         try:
             data = await response.json()
             _LOGGER.error(
-                "API request failed with status %s (%s)", response.status, data
+                "API %s request %s failed with status %s (%s)", response.method, response.url, response.status, data
             )
         except Exception:
-            _LOGGER.error("API request failed with status %s", response.status)
+            _LOGGER.error("API %s request %s failed with status %s", response.method, response.url, response.status)
 
     async def get_data(self) -> Dict[str, Any] | None:
         """Fetch data from Proteus API."""
