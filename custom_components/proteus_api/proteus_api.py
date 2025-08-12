@@ -7,6 +7,7 @@ import logging
 from typing import Any, Dict
 
 import aiohttp
+from aiohttp_retry import RetryClient, ExponentialRetry
 
 from .const import (
     API_BASE_URL,
@@ -78,6 +79,8 @@ class ProteusAPI:
         try:
             session = await self._get_session()
 
+            client = RetryClient(client_session=session)
+
             params = {
                 "batch": "1",
                 "input": json.dumps(
@@ -91,7 +94,7 @@ class ProteusAPI:
                 ),
             }
 
-            async with session.get(
+            async with client.get(
                 f"{API_BASE_URL}{API_ENDPOINT}",
                 params=params,
                 headers=self.get_headers(),
@@ -166,6 +169,8 @@ class ProteusAPI:
         try:
             session = await self._get_session()
 
+            client = RetryClient(client_session=session)
+
             payload = {
                 "0": {
                     "json": {
@@ -176,7 +181,7 @@ class ProteusAPI:
                 }
             }
 
-            async with session.post(
+            async with client.post(
                 f"{API_BASE_URL}{API_CONTROL_ENDPOINT}?batch=1",
                 json=payload,
                 headers=self.get_headers(),
@@ -192,6 +197,8 @@ class ProteusAPI:
         try:
             session = await self._get_session()
 
+            client = RetryClient(client_session=session)
+
             payload = {
                 "0": {
                     "json": {
@@ -201,7 +208,7 @@ class ProteusAPI:
                 }
             }
 
-            async with session.post(
+            async with client.post(
                 f"{API_BASE_URL}{API_MODE_ENDPOINT}?batch=1",
                 json=payload,
                 headers=self.get_headers(),
