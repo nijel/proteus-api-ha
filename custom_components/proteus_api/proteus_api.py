@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Dict
+from typing import Any
 
 import aiohttp
-from aiohttp_retry import RetryClient, ExponentialRetry
+from aiohttp_retry import RetryClient
 
 from .const import (
     API_BASE_URL,
@@ -30,13 +30,19 @@ class ProteusAPI:
         self.password = password
         self._session = None
 
-    def get_headers(self) -> dict[str,str]:
+    def get_headers(self) -> dict[str, str]:
+        """Build HTTP headers for the next request.
+
+        Includes CSRF header if session is open.
+        """
         result = {
             "Content-Type": "application/json",
             "Origin": "https://proteus.deltagreen.cz",
         }
         if self._session is not None:
-            result["x-proteus-csrf"] =  self._session.cookie_jar.filter_cookies(API_BASE_URL)["proteus_csrf"].value
+            result["x-proteus-csrf"] = self._session.cookie_jar.filter_cookies(
+                API_BASE_URL
+            )["proteus_csrf"].value
         return result
 
     async def _get_session(self) -> aiohttp.ClientSession:
@@ -69,12 +75,21 @@ class ProteusAPI:
         try:
             data = await response.json()
             _LOGGER.error(
-                "API %s request %s failed with status %s (%s)", response.method, response.url, response.status, data
+                "API %s request %s failed with status %s (%s)",
+                response.method,
+                response.url,
+                response.status,
+                data,
             )
         except Exception:
-            _LOGGER.error("API %s request %s failed with status %s", response.method, response.url, response.status)
+            _LOGGER.error(
+                "API %s request %s failed with status %s",
+                response.method,
+                response.url,
+                response.status,
+            )
 
-    async def get_data(self) -> Dict[str, Any] | None:
+    async def get_data(self) -> dict[str, Any] | None:
         """Fetch data from Proteus API."""
         try:
             session = await self._get_session()
@@ -109,46 +124,46 @@ class ProteusAPI:
             _LOGGER.error("Error fetching data: %s", ex)
             return None
 
-    def _parse_data(self, raw_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _parse_data(self, raw_data: dict[str, Any]) -> dict[str, Any]:
         """Parse raw API data into structured format."""
+        if len(raw_data) != 5:
+            _LOGGER.error("Missing data: %s", raw_data)
+            return {}
         try:
             parsed = {}
 
             # Basic info
-            if "0" in raw_data and "result" in raw_data["0"]:
-                detail = raw_data["0"]["result"]["data"]["json"]
-                parsed["flexibility_state"] = detail["household"]["flexibilityState"]
-                parsed["control_mode"] = detail["controlMode"]
+            detail = raw_data[0]["result"]["data"]["json"]
+            parsed["flexibility_state"] = detail["household"]["flexibilityState"]
+            parsed["control_mode"] = detail["controlMode"]
 
             # Flexibility rewards
-            if "1" in raw_data and "result" in raw_data["1"]:
-                rewards = raw_data["1"]["result"]["data"]["json"]
-                parsed["flexibility_today"] = rewards["todayWithVat"]
-                parsed["flexibility_month"] = rewards["monthToDateWithVat"]
-                parsed["flexibility_total"] = rewards["totalWithVat"]
+            rewards = raw_data[1]["result"]["data"]["json"]
+            parsed["flexibility_today"] = round(rewards["todayWithVat"], 2)
+            parsed["flexibility_month"] = round(rewards["monthToDateWithVat"], 2)
+            parsed["flexibility_total"] = round(rewards["totalWithVat"], 2)
 
             # Manual controls
-            if "2" in raw_data and "result" in raw_data["2"]:
-                controls = raw_data["2"]["result"]["data"]["json"]["manualControls"]
-                parsed["manual_controls"] = {}
-                for control in controls:
-                    parsed["manual_controls"][control["type"]] = (
-                        control["state"] == "ENABLED"
-                    )
+            controls = raw_data[2]["result"]["data"]["json"]["manualControls"]
+            parsed["manual_controls"] = {}
+            for control in controls:
+                parsed["manual_controls"][control["type"]] = (
+                    control["state"] == "ENABLED"
+                )
 
             # Current command
-            if "3" in raw_data and "result" in raw_data["3"]:
-                command_data = raw_data["3"]["result"]["data"]["json"]
-                if command_data.get("command"):
-                    parsed["current_command"] = command_data["command"]["type"]
-                    parsed["command_end"] = command_data["command"]["endAt"]
-                else:
-                    parsed["current_command"] = "NONE"
-                    parsed["command_end"] = None
+            command_data = raw_data[3]["result"]["data"]["json"]
+            if command_data.get("command"):
+                parsed["current_command"] = command_data["command"]["type"]
+                parsed["command_end"] = command_data["command"]["endAt"]
+            else:
+                parsed["current_command"] = "NONE"
+                parsed["command_end"] = None
 
             # Current step metadata
-            if "4" in raw_data and "result" in raw_data["4"]:
-                metadata = raw_data["4"]["result"]["data"]["json"]["metadata"]
+            current_step = raw_data[4]["result"]["data"]["json"]
+            if current_step is not None:
+                metadata = current_step["metadata"]
                 parsed["flexalgo_battery"] = metadata.get("flexalgoBattery")
                 parsed["flexalgo_battery_fallback"] = metadata.get(
                     "flexalgoBatteryFallback"
