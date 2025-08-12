@@ -1,12 +1,17 @@
 """Config flow for Proteus API integration."""
+
 from __future__ import annotations
+
 import logging
 from typing import Any
+
 import voluptuous as vol
+
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
+
 from .const import DOMAIN
 from .proteus_api import ProteusAPI
 
@@ -31,11 +36,13 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     except Exception as ex:
         _LOGGER.error("Connection failed: %s", ex)
         raise CannotConnect from ex
-    
+
     return {"title": f"Proteus API ({data['inverter_id'][:8]}...)"}
+
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Proteus API."""
+
     VERSION = 1
 
     async def async_step_user(
@@ -69,8 +76,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
         )
 
+
 class CannotConnect(HomeAssistantError):
     """Error to indicate we cannot connect."""
+
 
 class InvalidAuth(HomeAssistantError):
     """Error to indicate there is invalid auth."""

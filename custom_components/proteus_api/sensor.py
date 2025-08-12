@@ -1,12 +1,12 @@
 """Sensor platform for Proteus API."""
+
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from homeassistant.components.sensor import (
-    SensorEntity,
     SensorDeviceClass,
+    SensorEntity,
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
@@ -27,7 +27,7 @@ async def async_setup_entry(
 ) -> None:
     """Set up Proteus API sensor based on a config entry."""
     coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
-    
+
     sensors = [
         ProteusFlexibilityStatusSensor(coordinator, config_entry),
         ProteusModeSensor(coordinator, config_entry),
@@ -43,7 +43,7 @@ async def async_setup_entry(
         ProteusPredictedProductionSensor(coordinator, config_entry),
         ProteusPredictedConsumptionSensor(coordinator, config_entry),
     ]
-    
+
     async_add_entities(sensors)
 
 
@@ -75,6 +75,7 @@ class ProteusFlexibilityStatusSensor(ProteusBaseSensor):
         if self.coordinator.data is None:
             return None
         return self.coordinator.data.get("flexibility_state")
+
 
 class ProteusModeSensor(ProteusBaseSensor):
     """Mode sensor."""

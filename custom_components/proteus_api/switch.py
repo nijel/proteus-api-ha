@@ -1,4 +1,5 @@
 """Switch platform for Proteus API."""
+
 from __future__ import annotations
 
 import asyncio
@@ -11,7 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, CONTROL_TYPES
+from .const import CONTROL_TYPES, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -24,9 +25,9 @@ async def async_setup_entry(
     """Set up Proteus API switch based on a config entry."""
     coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
     api = hass.data[DOMAIN][config_entry.entry_id]["api"]
-    
+
     switches = []
-    
+
     # Add manual control switches
     for control_type, friendly_name in CONTROL_TYPES.items():
         switches.append(
@@ -34,10 +35,10 @@ async def async_setup_entry(
                 coordinator, config_entry, api, control_type, friendly_name
             )
         )
-    
+
     # Add automatic mode switch
     switches.append(ProteusAutomaticModeSwitch(coordinator, config_entry, api))
-    
+
     async_add_entities(switches)
 
 

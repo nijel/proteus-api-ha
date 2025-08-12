@@ -1,9 +1,12 @@
+import logging
+
 import aiohttp
 import async_timeout
-import logging
+
 from .const import API_URL
 
 _LOGGER = logging.getLogger(__name__)
+
 
 class ProteusApi:
     def __init__(self, inverter_id, session_cookie):
@@ -27,12 +30,15 @@ class ProteusApi:
 
         try:
             async with async_timeout.timeout(25):
-                async with session.get(API_URL, headers=headers, params={"batch": 1, "input": str(payload)}) as resp:
+                async with session.get(
+                    API_URL, headers=headers, params={"batch": 1, "input": str(payload)}
+                ) as resp:
                     if resp.status == 200:
                         return await resp.json()
-                    else:
-                        _LOGGER.error("Error fetching data from Proteus API: HTTP %s", resp.status)
-                        return None
+                    _LOGGER.error(
+                        "Error fetching data from Proteus API: HTTP %s", resp.status
+                    )
+                    return None
         except Exception as e:
             _LOGGER.error("Exception during Proteus API call: %s", e)
             return None

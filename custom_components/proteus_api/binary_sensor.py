@@ -1,4 +1,5 @@
 """Binary sensor platform for Proteus API."""
+
 from __future__ import annotations
 
 import logging
@@ -9,7 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, CONTROL_TYPES
+from .const import CONTROL_TYPES, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -21,16 +22,16 @@ async def async_setup_entry(
 ) -> None:
     """Set up Proteus API binary sensor based on a config entry."""
     coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
-    
+
     binary_sensors = []
-    
+
     for control_type, friendly_name in CONTROL_TYPES.items():
         binary_sensors.append(
             ProteusManualControlBinarySensor(
                 coordinator, config_entry, control_type, friendly_name
             )
         )
-    
+
     async_add_entities(binary_sensors)
 
 
