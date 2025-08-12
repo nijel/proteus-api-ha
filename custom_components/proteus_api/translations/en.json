@@ -6,11 +6,12 @@
         "description": "Enter the details to connect to Proteus API",
         "data": {
           "inverter_id": "Inverter ID",
-          "session_cookie": "Session cookie"
+          "email": "E-mail",
+          "password": "Password"
         },
         "data_description": {
           "inverter_id": "Inverter ID from URL (e.g. from https://proteus.deltagreen.cz/cs/device/inverter/XXX)",
-          "session_cookie": "Session cookie from browser developer tools (F12)"
+          "password": "Password authentication has to be configured."
         }
       }
     },

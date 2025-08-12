@@ -6,11 +6,13 @@
         "description": "Zadejte údaje pro připojení k Proteus API",
         "data": {
           "inverter_id": "ID invertoru",
-          "session_cookie": "Session cookie"
+          "email": "E-mail",
+          "password": "Heslo"
         },
         "data_description": {
           "inverter_id": "ID invertoru z URL (např. z https://proteus.deltagreen.cz/cs/device/inverter/XXX)",
           "session_cookie": "Session cookie z vývojářských nástrojů prohlížeče (F12)"
+          "password": "Přihlašování heslem musí být nastaveno."
         }
       }
     },

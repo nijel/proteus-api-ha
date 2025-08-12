@@ -8,7 +8,13 @@ from typing import Any, Dict
 
 import aiohttp
 
-from .const import API_BASE_URL, API_ENDPOINT, API_CONTROL_ENDPOINT, API_MODE_ENDPOINT
+from .const import (
+    API_BASE_URL,
+    API_CONTROL_ENDPOINT,
+    API_ENDPOINT,
+    API_LOGIN_ENDPOINT,
+    API_MODE_ENDPOINT,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -16,10 +22,11 @@ _LOGGER = logging.getLogger(__name__)
 class ProteusAPI:
     """Proteus API client."""
 
-    def __init__(self, inverter_id: str, session_cookie: str) -> None:
+    def __init__(self, inverter_id: str, email: str, password: str) -> None:
         """Initialize the API client."""
         self.inverter_id = inverter_id
-        self.session_cookie = session_cookie
+        self.email = email
+        self.password = password
         self._session = None
 
     async def _get_session(self) -> aiohttp.ClientSession:
@@ -29,11 +36,35 @@ class ProteusAPI:
                 timeout=aiohttp.ClientTimeout(total=25),
                 headers={
                     "Content-Type": "application/json",
-                    "Cookie": f"proteus_session={self.session_cookie}",
                     "Origin": "https://proteus.deltagreen.cz",
                 },
             )
+
+            payload = {
+                "json": {
+                    "tenantId": "TID_DELTA_GREEN",
+                    "email": self.email,
+                    "password": self.password,
+                }
+            }
+
+            async with session.post(
+                f"{API_BASE_URL}{API_LOGIN_ENDPOINT}",
+                json=payload,
+            ) as response:
+                if response.status != 200:
+                    await self._log_error(response)
+
         return self._session
+
+    async def _log_error(self, response: aiohttp.ClientResponse) -> None:
+        try:
+            data = await response.json()
+            _LOGGER.error(
+                "API request failed with status %s (%s)", response.status, data
+            )
+        except Exception:
+            _LOGGER.error("API request failed with status %s", response.status)
 
     async def get_data(self) -> Dict[str, Any] | None:
         """Fetch data from Proteus API."""
@@ -60,14 +91,9 @@ class ProteusAPI:
                 if response.status == 200:
                     data = await response.json()
                     return self._parse_data(data)
-                else:
-                    try:
-                        data = await response.json()
-                        _LOGGER.error("API request failed with status %s (%s)", response.status, data)
-                    except Exception:
-                        _LOGGER.error("API request failed with status %s", response.status)
-                    return None
-                    
+                await self._log_error(response)
+                return None
+
         except Exception as ex:
             _LOGGER.error("Error fetching data: %s", ex)
             return None

@@ -22,9 +22,10 @@ PLATFORMS = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.SWITCH]
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Proteus API from a config entry."""
     inverter_id = entry.data["inverter_id"]
-    session_cookie = entry.data["session_cookie"]
+    email = entry.data["email"]
+    password = entry.data["password"]
 
-    api = ProteusAPI(inverter_id, session_cookie)
+    api = ProteusAPI(inverter_id, email, password)
 
     coordinator = ProteusDataUpdateCoordinator(
         hass,
