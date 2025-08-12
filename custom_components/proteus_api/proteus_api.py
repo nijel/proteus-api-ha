@@ -29,15 +29,21 @@ class ProteusAPI:
         self.password = password
         self._session = None
 
+    def get_headers(self) -> dict[str,str]:
+        result = {
+            "Content-Type": "application/json",
+            "Origin": "https://proteus.deltagreen.cz",
+        }
+        if self._session is not None:
+            result["x-proteus-csrf"] =  self._session.cookie_jar.filter_cookies(API_BASE_URL)["proteus_csrf"].value
+        return result
+
     async def _get_session(self) -> aiohttp.ClientSession:
         """Get or create aiohttp session."""
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession(
                 timeout=aiohttp.ClientTimeout(total=25),
-                headers={
-                    "Content-Type": "application/json",
-                    "Origin": "https://proteus.deltagreen.cz",
-                },
+                headers=self.get_headers(),
             )
 
             payload = {
@@ -88,6 +94,7 @@ class ProteusAPI:
             async with session.get(
                 f"{API_BASE_URL}{API_ENDPOINT}",
                 params=params,
+                headers=self.get_headers(),
             ) as response:
                 if response.status == 200:
                     data = await response.json()
@@ -172,6 +179,7 @@ class ProteusAPI:
             async with session.post(
                 f"{API_BASE_URL}{API_CONTROL_ENDPOINT}?batch=1",
                 json=payload,
+                headers=self.get_headers(),
             ) as response:
                 return response.status == 200
 
@@ -196,6 +204,7 @@ class ProteusAPI:
             async with session.post(
                 f"{API_BASE_URL}{API_MODE_ENDPOINT}?batch=1",
                 json=payload,
+                headers=self.get_headers(),
             ) as response:
                 return response.status == 200
 
