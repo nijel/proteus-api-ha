@@ -7,6 +7,7 @@ API_BASE_URL = "https://proteus.deltagreen.cz/api/trpc/"
 API_ENDPOINT = "inverters.detail,inverters.flexibilityRewardsSummary,inverters.controls.state,commands.current,inverters.currentStep"
 API_CONTROL_ENDPOINT = "inverters.controls.updateManualControl"
 API_MODE_ENDPOINT = "inverters.controls.updateControlMode"
+API_FLEXIBILITY_ENDPOINT = "inverters.controls.updateFlexibilityMode"
 API_LOGIN_ENDPOINT = "users.loginWithEmailAndPassword"
 
 # Control types

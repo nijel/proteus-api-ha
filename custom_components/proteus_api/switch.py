@@ -38,6 +38,7 @@ async def async_setup_entry(
 
     # Add automatic mode switch
     switches.append(ProteusAutomaticModeSwitch(coordinator, config_entry, api))
+    switches.append(ProteusFlexibilityModeSwitch(coordinator, config_entry, api))
 
     async_add_entities(switches)
 
@@ -115,7 +116,7 @@ class ProteusAutomaticModeSwitch(ProteusBaseSwitch):
         super().__init__(coordinator, config_entry, api)
         self._attr_name = "Proteus optimalizace algoritmem"
         self._attr_unique_id = "proteus_switch_automatic_mode"
-        self._attr_icon = "mdi:robot"
+        self._attr_icon = "mdi:creation"
 
     @property
     def is_on(self) -> bool | None:
@@ -135,6 +136,42 @@ class ProteusAutomaticModeSwitch(ProteusBaseSwitch):
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the switch off (enable manual mode)."""
         success = await self._api.update_control_mode("MANUAL")
+        if success:
+            # Wait a bit and then refresh data
+            await asyncio.sleep(2)
+            await self.coordinator.async_request_refresh()
+        else:
+            _LOGGER.error("Failed to enable manual mode")
+
+
+class ProteusFlexibilityModeSwitch(ProteusBaseSwitch):
+    """Switch for flexibilith mode."""
+
+    def __init__(self, coordinator, config_entry, api):
+        """Initialize the switch."""
+        super().__init__(coordinator, config_entry, api)
+        self._attr_name = "Proteus obchodování flexiblity"
+        self._attr_unique_id = "proteus_switch_flexibility_mode"
+        self._attr_icon = "mdi:robot"
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return true if the switch is on (automatic mode)."""
+        return self.coordinator.data.get("flexibility_mode") != "NONE"
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Turn the switch on (enable automatic mode)."""
+        success = await self._api.update_flexibility_mode("FULL")
+        if success:
+            # Wait a bit and then refresh data
+            await asyncio.sleep(2)
+            await self.coordinator.async_request_refresh()
+        else:
+            _LOGGER.error("Failed to enable automatic mode")
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Turn the switch off (enable manual mode)."""
+        success = await self._api.update_flexibility_mode("NONE")
         if success:
             # Wait a bit and then refresh data
             await asyncio.sleep(2)

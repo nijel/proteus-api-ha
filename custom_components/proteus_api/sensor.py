@@ -31,6 +31,7 @@ async def async_setup_entry(
     sensors = [
         ProteusFlexibilityStatusSensor(coordinator, config_entry),
         ProteusModeSensor(coordinator, config_entry),
+        ProteusFlexibilityModeSensor(coordinator, config_entry),
         ProteusFlexibilityTodaySensor(coordinator, config_entry),
         ProteusFlexibilityMonthSensor(coordinator, config_entry),
         ProteusFlexibilityTotalSensor(coordinator, config_entry),
@@ -88,6 +89,19 @@ class ProteusModeSensor(ProteusBaseSensor):
     def native_value(self) -> str | None:
         """Return the state of the sensor."""
         return self.coordinator.data.get("control_mode")
+
+
+class ProteusFlexibilityModeSensor(ProteusBaseSensor):
+    """Flexibility mode sensor."""
+
+    _attr_name = "Proteus režim flexibility"
+    _attr_unique_id = "proteus_flexibility_mode"
+    _attr_icon = "mdi:cog"
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the state of the sensor."""
+        return self.coordinator.data.get("flexibility_mode")
 
 
 class ProteusFlexibilityTodaySensor(ProteusBaseSensor):

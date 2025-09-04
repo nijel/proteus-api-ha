@@ -13,6 +13,7 @@ from .const import (
     API_BASE_URL,
     API_CONTROL_ENDPOINT,
     API_ENDPOINT,
+    API_FLEXIBILITY_ENDPOINT,
     API_LOGIN_ENDPOINT,
     API_MODE_ENDPOINT,
 )
@@ -144,12 +145,15 @@ class ProteusAPI:
             parsed["flexibility_total"] = round(rewards["totalWithVat"], 2)
 
             # Manual controls
-            controls = raw_data[2]["result"]["data"]["json"]["manualControls"]
+            controls = raw_data[2]["result"]["data"]["json"]
+            manual_controls = controls["manualControls"]
             parsed["manual_controls"] = {}
-            for control in controls:
+            for control in manual_controls:
                 parsed["manual_controls"][control["type"]] = (
                     control["state"] == "ENABLED"
                 )
+
+            parsed["flexibility_mode"] = controls["flexibilityMode"]
 
             # Current command
             command_data = raw_data[3]["result"]["data"]["json"]
@@ -232,6 +236,33 @@ class ProteusAPI:
 
         except Exception:
             _LOGGER.exception("Error updating control mode")
+            return False
+
+    async def update_flexibility_mode(self, mode: str) -> bool:
+        """Update flexibility mode."""
+        try:
+            session = await self._get_session()
+
+            client = RetryClient(client_session=session)
+
+            payload = {
+                "0": {
+                    "json": {
+                        "inverterId": self.inverter_id,
+                        "flexibilityMode": mode,
+                    }
+                }
+            }
+
+            async with client.post(
+                f"{API_BASE_URL}{API_FLEXIBILITY_ENDPOINT}?batch=1",
+                json=payload,
+                headers=self.get_headers(),
+            ) as response:
+                return response.status == 200
+
+        except Exception:
+            _LOGGER.exception("Error updating flexibility mode")
             return False
 
     async def close(self) -> None:
