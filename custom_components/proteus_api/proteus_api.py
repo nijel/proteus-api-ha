@@ -120,8 +120,8 @@ class ProteusAPI:
                 await self._log_error(response)
                 return None
 
-        except Exception as ex:
-            _LOGGER.error("Error fetching data: %s", ex)
+        except Exception:
+            _LOGGER.exception("Error fetching data")
             return None
 
     def _parse_data(self, raw_data: dict[str, Any]) -> dict[str, Any]:
@@ -175,8 +175,8 @@ class ProteusAPI:
 
             return parsed
 
-        except Exception as ex:
-            _LOGGER.error("Error parsing data: %s", ex)
+        except Exception:
+            _LOGGER.exception("Error parsing data")
             return {}
 
     async def update_manual_control(self, control_type: str, state: str) -> bool:
@@ -203,8 +203,8 @@ class ProteusAPI:
             ) as response:
                 return response.status == 200
 
-        except Exception as ex:
-            _LOGGER.error("Error updating manual control: %s", ex)
+        except Exception:
+            _LOGGER.exception("Error updating manual control")
             return False
 
     async def update_control_mode(self, mode: str) -> bool:
@@ -230,8 +230,8 @@ class ProteusAPI:
             ) as response:
                 return response.status == 200
 
-        except Exception as ex:
-            _LOGGER.error("Error updating control mode: %s", ex)
+        except Exception:
+            _LOGGER.exception("Error updating control mode")
             return False
 
     async def close(self) -> None:
