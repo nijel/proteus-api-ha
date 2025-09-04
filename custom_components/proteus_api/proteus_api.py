@@ -7,7 +7,7 @@ import logging
 from typing import Any
 
 import aiohttp
-from aiohttp_retry import RetryClient
+from aiohttp_retry import ExponentialRetry, RetryClient
 
 from .const import (
     API_BASE_URL,
@@ -72,6 +72,11 @@ class ProteusAPI:
 
         return self._session
 
+    async def _get_client(self) -> RetryClient:
+        session = await self._get_session()
+        retry_options = ExponentialRetry(factor=10)
+        return RetryClient(client_session=session, retry_options=retry_options)
+
     async def _log_error(self, response: aiohttp.ClientResponse) -> None:
         try:
             data = await response.json()
@@ -93,9 +98,7 @@ class ProteusAPI:
     async def get_data(self) -> dict[str, Any] | None:
         """Fetch data from Proteus API."""
         try:
-            session = await self._get_session()
-
-            client = RetryClient(client_session=session)
+            client = await self._get_client()
 
             params = {
                 "batch": "1",
@@ -186,9 +189,7 @@ class ProteusAPI:
     async def update_manual_control(self, control_type: str, state: str) -> bool:
         """Update manual control state."""
         try:
-            session = await self._get_session()
-
-            client = RetryClient(client_session=session)
+            client = await self._get_client()
 
             payload = {
                 "0": {
@@ -214,9 +215,7 @@ class ProteusAPI:
     async def update_control_mode(self, mode: str) -> bool:
         """Update control mode."""
         try:
-            session = await self._get_session()
-
-            client = RetryClient(client_session=session)
+            client = await self._get_client()
 
             payload = {
                 "0": {
@@ -241,9 +240,7 @@ class ProteusAPI:
     async def update_flexibility_mode(self, mode: str) -> bool:
         """Update flexibility mode."""
         try:
-            session = await self._get_session()
-
-            client = RetryClient(client_session=session)
+            client = await self._get_client()
 
             payload = {
                 "0": {
