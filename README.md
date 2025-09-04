@@ -33,22 +33,15 @@ Integrace pro Home Assistant umožňující ovládání a monitorování fotovol
 3. Vyhledejte "Proteus API"
 4. Zadejte požadované údaje:
    - **ID invertoru**: Najdete v URL na stránce invertoru (https://proteus.deltagreen.cz/cs/device/inverter/XXX)
-   - **Session cookie**: Zkopírujte z vývojářských nástrojů prohlížeče (F12)
-
-### Získání session cookie
-
-1. Přihlaste se na https://proteus.deltagreen.cz
-2. Otevřete vývojářské nástroje (F12)
-3. Přejděte na záložku **Application** (Chrome) nebo **Storage** (Firefox)
-4. V sekci **Cookies** najděte `proteus_session`
-5. Zkopírujte hodnotu cookie
+   - **Uživatelské jméno a heslo**: V Proteovi musí být nastavené přihlašování heslem
 
 ## Dostupné entity
 
 ### Sensory
 
-- `sensor.proteus_flexibilita_dostupna` - Stav dostupnosti flexibility
+- `sensor.proteus_flexibilita_dostupna` - Stav dostupnosti flexibility (USABLE/NOT_USABLE)
 - `sensor.proteus_rezim` - Aktuální režim (AUTOMATIC/MANUAL)
+- `sensor.proteus_rezim_flexibility` - Režim flexibility (FULL/NONE)
 - `sensor.proteus_obchodovani_flexibility_dnes` - Dnešní zisk z flexibility
 - `sensor.proteus_obchodovani_flexibility_za_mesic` - Měsíční zisk z flexibility
 - `sensor.proteus_obchodovani_flexibility_celkem` - Celkový zisk z flexibility
@@ -71,18 +64,13 @@ Integrace pro Home Assistant umožňující ovládání a monitorování fotovol
 
 ### Přepínače
 
+- `switch.proteus_obchodovani_flexiblity` - Přepínání obchodování flexibility
+- `switch.proteus_optimalizace_algoritmem` - Přepínání mezi automatickým a manuálním režimem
 - `switch.proteus_prodej_do_site_misto_nabijeni` - Ovládání prodeje do sítě místo nabíjení
 - `switch.proteus_prodej_z_baterie_do_site` - Ovládání prodeje z baterie do sítě
 - `switch.proteus_setreni_energie_v_baterii` - Ovládání šetření energie v baterii
 - `switch.proteus_nabijeni_baterie_ze_site` - Ovládání nabíjení baterie ze sítě
 - `switch.proteus_zakaz_pretoku` - Ovládání zákazu přetoků
-- `switch.proteus_optimalizace_algoritmem` - Přepínání mezi automatickým a manuálním režimem
-
-## Známé problémy
-
-- Občas může aktualizace selhat s chybou TLS/SSL connection has been closed (EOF)
-- V takovém případě se sensory stanou na 30 sekund nedostupné
-- Session cookie je potřeba obnovit přibližně jednou za měsíc
 
 ## Licence
 
