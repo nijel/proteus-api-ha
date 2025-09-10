@@ -74,7 +74,7 @@ class ProteusAPI:
 
     async def _get_client(self) -> RetryClient:
         session = await self._get_session()
-        retry_options = ExponentialRetry(factor=10)
+        retry_options = ExponentialRetry(factor=10, exceptions={ConnectionError})
         return RetryClient(client_session=session, retry_options=retry_options)
 
     async def _log_error(self, response: aiohttp.ClientResponse) -> None:
