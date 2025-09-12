@@ -2,6 +2,11 @@
 
 Integrace pro Home Assistant umožňující ovládání a monitorování fotovoltaické soustavy přes Proteus API od Delta Green.
 
+## Varování
+
+- Používá nestabilní a nedokumentované API, takže se při změnách může rozbít.
+- Stav se načítá jednou za 30 sekund.
+
 ## Funkce
 
 - **Sensory** - sledování stavu flexibility, zisku z flexibility, předpovědí výroby a spotřeby
