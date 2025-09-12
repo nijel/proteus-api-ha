@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 import json
 from json import JSONDecodeError
 import logging
@@ -166,7 +167,9 @@ class ProteusAPI:
             command_data = raw_data[3]["result"]["data"]["json"]
             if command_data.get("command"):
                 parsed["current_command"] = command_data["command"]["type"]
-                parsed["command_end"] = command_data["command"]["endAt"]
+                parsed["command_end"] = datetime.fromisoformat(
+                    command_data["command"]["endAt"]
+                )
             else:
                 parsed["current_command"] = "NONE"
                 parsed["command_end"] = None
