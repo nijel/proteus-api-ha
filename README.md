@@ -14,24 +14,24 @@ Integrace pro Home Assistant umožňující ovládání a monitorování fotovol
 ### Přes HACS (doporučeno)
 
 1. Otevřete HACS v Home Assistant
-2. Přejděte na **Integrations**
-3. Klikněte na **Explore & Download Repositories**
-4. Vyhledejte "Proteus API"
-5. Klikněte na **Download**
-6. Restartujte Home Assistant
+1. Přejděte na **Integrations**
+1. Klikněte na **Explore & Download Repositories**
+1. Vyhledejte "Proteus API"
+1. Klikněte na **Download**
+1. Restartujte Home Assistant
 
 ### Manuální instalace
 
 1. Stáhněte nebo naklonujte tento repozitář
-2. Zkopírujte složku `custom_components/proteus_api` do `config/custom_components/proteus_api`
-3. Restartujte Home Assistant
+1. Zkopírujte složku `custom_components/proteus_api` do `config/custom_components/proteus_api`
+1. Restartujte Home Assistant
 
 ## Konfigurace
 
 1. Přejděte na **Nastavení** → **Zařízení a služby**
-2. Klikněte na **Přidat integraci**
-3. Vyhledejte "Proteus API"
-4. Zadejte požadované údaje:
+1. Klikněte na **Přidat integraci**
+1. Vyhledejte "Proteus API"
+1. Zadejte požadované údaje:
    - **ID invertoru**: Najdete v URL na stránce invertoru (https://proteus.deltagreen.cz/cs/device/inverter/XXX)
    - **Uživatelské jméno a heslo**: V Proteovi musí být nastavené přihlašování heslem
 
