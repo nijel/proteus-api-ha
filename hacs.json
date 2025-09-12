@@ -1,6 +1,8 @@
 {
   "name": "Proteus API",
   "content_in_root": false,
-  "country": ["CZ"],
+  "country": [
+    "CZ"
+  ],
   "homeassistant": "2025.1.0"
 }
