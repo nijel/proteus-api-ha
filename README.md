@@ -71,6 +71,7 @@ Integrace pro Home Assistant umožňující ovládání a monitorování fotovol
 - `switch.proteus_setreni_energie_v_baterii` - Ovládání šetření energie v baterii
 - `switch.proteus_nabijeni_baterie_ze_site` - Ovládání nabíjení baterie ze sítě
 - `switch.proteus_zakaz_pretoku` - Ovládání zákazu přetoků
+- `switch.proteus_rizeni_fve` - Povolení řízení FVE
 
 ## Licence
 
