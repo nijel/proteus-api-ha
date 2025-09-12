@@ -1,18 +1,13 @@
 {
   "domain": "proteus_api",
   "name": "Proteus API",
-  "version": "1.0.0",
-  "documentation": "https://github.com/nijel/proteus-api",
-  "issue_tracker": "https://github.com/nijel/proteus-api/issues",
-  "dependencies": [],
-  "integration_type": "service",
-  "codeowners": [
-    "@nijel"
-  ],
-  "requirements": [
-    "aiohttp>=3.8.0",
-    "aiohttp-retry>=2.9.1"
-  ],
+  "codeowners": [ "@nijel" ],
   "config_flow": true,
-  "iot_class": "cloud_polling"
+  "dependencies": [],
+  "documentation": "https://github.com/nijel/proteus-api",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/nijel/proteus-api/issues",
+  "requirements": [ "aiohttp>=3.8.0", "aiohttp-retry>=2.9.1" ],
+  "version": "1.0.0"
 }
