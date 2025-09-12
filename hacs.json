@@ -3,7 +3,11 @@
   "content_in_root": false,
   "filename": "proteus_api.zip",
   "render_readme": true,
-  "domains": ["sensor", "binary_sensor", "switch"],
+  "domains": [
+    "sensor",
+    "binary_sensor",
+    "switch"
+  ],
   "iot_class": "cloud_polling",
   "homeassistant": "2024.1.0"
 }
