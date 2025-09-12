@@ -37,6 +37,7 @@ async def async_setup_entry(
         )
 
     # Add automatic mode switch
+    switches.append(ProteusControlEnabledSwitch(coordinator, config_entry, api))
     switches.append(ProteusAutomaticModeSwitch(coordinator, config_entry, api))
     switches.append(ProteusFlexibilityModeSwitch(coordinator, config_entry, api))
 
@@ -106,6 +107,42 @@ class ProteusManualControlSwitch(ProteusBaseSwitch):
             await self.coordinator.async_request_refresh()
         else:
             _LOGGER.error("Failed to turn off %s", self._control_type)
+
+
+class ProteusControlEnabledSwitch(ProteusBaseSwitch):
+    """Switch for control enabled."""
+
+    def __init__(self, coordinator, config_entry, api):
+        """Initialize the switch."""
+        super().__init__(coordinator, config_entry, api)
+        self._attr_name = "Proteus řízení FVE"
+        self._attr_unique_id = "proteus_switch_control_enabled"
+        self._attr_icon = "mdi:network"
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return true if the switch is on (automatic enabled)."""
+        return self.coordinator.data.get("control_enabled")
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Turn the switch on (enable automatic enabled)."""
+        success = await self._api.update_control_enabled(True)
+        if success:
+            # Wait a bit and then refresh data
+            await asyncio.sleep(2)
+            await self.coordinator.async_request_refresh()
+        else:
+            _LOGGER.error("Failed to enable automatic enabled")
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Turn the switch off (enable manual enabled)."""
+        success = await self._api.update_control_enabled(False)
+        if success:
+            # Wait a bit and then refresh data
+            await asyncio.sleep(2)
+            await self.coordinator.async_request_refresh()
+        else:
+            _LOGGER.error("Failed to enable manual enabled")
 
 
 class ProteusAutomaticModeSwitch(ProteusBaseSwitch):

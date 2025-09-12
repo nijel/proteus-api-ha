@@ -16,6 +16,7 @@ from .const import (
     API_FLEXIBILITY_ENDPOINT,
     API_LOGIN_ENDPOINT,
     API_MODE_ENDPOINT,
+    API_ENABLED_ENDPOINT,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -120,6 +121,8 @@ class ProteusAPI:
             ) as response:
                 if response.status == 200:
                     data = await response.json()
+                    import pprint
+                    pprint.pprint(data)
                     return self._parse_data(data)
                 await self._log_error(response)
                 return None
@@ -140,6 +143,7 @@ class ProteusAPI:
             detail = raw_data[0]["result"]["data"]["json"]
             parsed["flexibility_state"] = detail["household"]["flexibilityState"]
             parsed["control_mode"] = detail["controlMode"]
+            parsed["control_enabled"] = detail["controlEnabled"]
 
             # Flexibility rewards
             rewards = raw_data[1]["result"]["data"]["json"]
@@ -210,6 +214,31 @@ class ProteusAPI:
 
         except Exception:
             _LOGGER.exception("Error updating manual control")
+            return False
+
+    async def update_control_enabled(self, enabled: bool) -> bool:
+        """Update control enabled."""
+        try:
+            client = await self._get_client()
+
+            payload = {
+                "0": {
+                    "json": {
+                        "inverterId": self.inverter_id,
+                        "controlEnabled": enabled,
+                    }
+                }
+            }
+
+            async with client.post(
+                f"{API_BASE_URL}{API_ENABLED_ENDPOINT}?batch=1",
+                json=payload,
+                headers=self.get_headers(),
+            ) as response:
+                return response.status == 200
+
+        except Exception:
+            _LOGGER.exception("Error updating enabled mode")
             return False
 
     async def update_control_mode(self, mode: str) -> bool:
