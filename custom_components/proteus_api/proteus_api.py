@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from json import JSONDecodeError
 import logging
 from typing import Any
 
@@ -81,19 +82,20 @@ class ProteusAPI:
     async def _log_error(self, response: aiohttp.ClientResponse) -> None:
         try:
             data = await response.json()
+        except JSONDecodeError:
+            _LOGGER.error(
+                "API %s request %s failed with status %s",
+                response.method,
+                response.url,
+                response.status,
+            )
+        else:
             _LOGGER.error(
                 "API %s request %s failed with status %s (%s)",
                 response.method,
                 response.url,
                 response.status,
                 data,
-            )
-        except Exception:
-            _LOGGER.error(
-                "API %s request %s failed with status %s",
-                response.method,
-                response.url,
-                response.status,
             )
 
     async def get_data(self) -> dict[str, Any] | None:
@@ -182,11 +184,11 @@ class ProteusAPI:
                 parsed["predicted_production"] = metadata.get("predictedProduction")
                 parsed["predicted_consumption"] = metadata.get("predictedConsumption")
 
-            return parsed
-
         except Exception:
             _LOGGER.exception("Error parsing data")
             return {}
+
+        return parsed
 
     async def update_manual_control(self, control_type: str, state: str) -> bool:
         """Update manual control state."""

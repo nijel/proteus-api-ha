@@ -33,11 +33,11 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     try:
         # Test the connection using executor job for synchronous API
         result = await hass.async_add_executor_job(api.get_data)
-        if not result:
-            raise InvalidAuth
     except Exception as ex:
         _LOGGER.error("Connection failed: %s", ex)
         raise CannotConnect from ex
+    if not result:
+        raise InvalidAuth
 
     return {"title": f"Proteus API ({data['inverter_id'][:8]}...)"}
 
