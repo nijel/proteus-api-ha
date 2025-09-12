@@ -5,6 +5,7 @@
   "documentation": "https://github.com/nijel/proteus-api",
   "issue_tracker": "https://github.com/nijel/proteus-api/issues",
   "dependencies": [],
+  "integration_type": "service",
   "codeowners": [
     "@nijel"
   ],
