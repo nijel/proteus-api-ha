@@ -12,11 +12,11 @@ from aiohttp_retry import ExponentialRetry, RetryClient
 from .const import (
     API_BASE_URL,
     API_CONTROL_ENDPOINT,
+    API_ENABLED_ENDPOINT,
     API_ENDPOINT,
     API_FLEXIBILITY_ENDPOINT,
     API_LOGIN_ENDPOINT,
     API_MODE_ENDPOINT,
-    API_ENABLED_ENDPOINT,
 )
 
 _LOGGER = logging.getLogger(__name__)

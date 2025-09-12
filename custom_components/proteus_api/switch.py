@@ -84,7 +84,10 @@ class ProteusManualControlSwitch(ProteusBaseSwitch):
 
     @property
     def available(self) -> bool:
-        return self.coordinator.data.get("control_enabled") and self.coordinator.data.get("control_mode") == "MANUAL"
+        return (
+            self.coordinator.data.get("control_enabled")
+            and self.coordinator.data.get("control_mode") == "MANUAL"
+        )
 
     @property
     def is_on(self) -> bool | None:
