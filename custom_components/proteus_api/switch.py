@@ -83,6 +83,10 @@ class ProteusManualControlSwitch(ProteusBaseSwitch):
         return icons.get(control_type, "mdi:toggle-switch")
 
     @property
+    def available(self) -> bool:
+        return self.coordinator.data.get("control_enabled") and self.coordinator.data.get("control_mode") == "MANUAL"
+
+    @property
     def is_on(self) -> bool | None:
         """Return true if the switch is on."""
         manual_controls = self.coordinator.data.get("manual_controls", {})
@@ -160,6 +164,10 @@ class ProteusAutomaticModeSwitch(ProteusBaseSwitch):
         """Return true if the switch is on (automatic mode)."""
         return self.coordinator.data.get("control_mode") == "AUTOMATIC"
 
+    @property
+    def available(self) -> bool:
+        return self.coordinator.data.get("control_enabled")
+
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the switch on (enable automatic mode)."""
         success = await self._api.update_control_mode("AUTOMATIC")
@@ -195,6 +203,10 @@ class ProteusFlexibilityModeSwitch(ProteusBaseSwitch):
     def is_on(self) -> bool | None:
         """Return true if the switch is on (automatic mode)."""
         return self.coordinator.data.get("flexibility_mode") != "NONE"
+
+    @property
+    def available(self) -> bool:
+        return self.coordinator.data.get("control_enabled")
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the switch on (enable automatic mode)."""

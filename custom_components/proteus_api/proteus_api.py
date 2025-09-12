@@ -121,8 +121,6 @@ class ProteusAPI:
             ) as response:
                 if response.status == 200:
                     data = await response.json()
-                    import pprint
-                    pprint.pprint(data)
                     return self._parse_data(data)
                 await self._log_error(response)
                 return None
