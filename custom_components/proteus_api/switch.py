@@ -198,7 +198,7 @@ class ProteusFlexibilityModeSwitch(ProteusBaseSwitch):
     def __init__(self, coordinator, config_entry, api):
         """Initialize the switch."""
         super().__init__(coordinator, config_entry, api)
-        self._attr_name = "Proteus obchodování flexiblity"
+        self._attr_name = "Proteus obchodování flexibility"
         self._attr_unique_id = "proteus_switch_flexibility_mode"
         self._attr_icon = "mdi:robot"
 
