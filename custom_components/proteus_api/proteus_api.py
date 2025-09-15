@@ -9,6 +9,7 @@ import logging
 from typing import Any
 
 import aiohttp
+from aiohttp.client_exceptions import ClientConnectionError
 from aiohttp_retry import ExponentialRetry, RetryClient
 
 from .const import (
@@ -77,7 +78,9 @@ class ProteusAPI:
 
     async def _get_client(self) -> RetryClient:
         session = await self._get_session()
-        retry_options = ExponentialRetry(factor=10, exceptions={ConnectionError})
+        retry_options = ExponentialRetry(
+            factor=10, exceptions={ConnectionError, ClientConnectionError}
+        )
         return RetryClient(client_session=session, retry_options=retry_options)
 
     async def _log_error(self, response: aiohttp.ClientResponse) -> None:
