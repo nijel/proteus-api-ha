@@ -164,7 +164,9 @@ class ProteusAPI:
                     control["state"] == "ENABLED"
                 )
 
-            parsed["flexibility_mode"] = controls["flexibilityMode"]
+            parsed["flexibility_capabilities"] = controls[
+                "flexibilityCapabilitiesEnabled"
+            ]
 
             # Current command
             command_data = raw_data[3]["result"]["data"]["json"]
@@ -272,7 +274,7 @@ class ProteusAPI:
             _LOGGER.exception("Error updating control mode")
             return False
 
-    async def update_flexibility_mode(self, mode: str) -> bool:
+    async def update_flexibility_mode(self, mode: list[str]) -> bool:
         """Update flexibility mode."""
         try:
             client = await self._get_client()
@@ -281,7 +283,7 @@ class ProteusAPI:
                 "0": {
                     "json": {
                         "inverterId": self.inverter_id,
-                        "flexibilityMode": mode,
+                        "flexibilityCapabilitiesEnabled": mode,
                     }
                 }
             }

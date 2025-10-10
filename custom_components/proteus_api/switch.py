@@ -191,7 +191,7 @@ class ProteusAutomaticModeSwitch(ProteusBaseSwitch):
             await asyncio.sleep(2)
             await self.coordinator.async_request_refresh()
         else:
-            _LOGGER.error("Failed to enable manual mode")
+            _LOGGER.error("Failed to disable manual mode")
 
 
 class ProteusFlexibilityModeSwitch(ProteusBaseSwitch):
@@ -207,7 +207,7 @@ class ProteusFlexibilityModeSwitch(ProteusBaseSwitch):
     @property
     def is_on(self) -> bool | None:
         """Return true if the switch is on (automatic mode)."""
-        return self.coordinator.data.get("flexibility_mode") != "NONE"
+        return self.coordinator.data.get("flexibility_capabilities") != []
 
     @property
     def available(self) -> bool:
@@ -216,20 +216,22 @@ class ProteusFlexibilityModeSwitch(ProteusBaseSwitch):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the switch on (enable automatic mode)."""
-        success = await self._api.update_flexibility_mode("FULL")
+        success = await self._api.update_flexibility_mode(
+            ["UP_POWER", "DOWN_BATTERY_POWER", "DOWN_SOLAR_CURTAILMENT_POWER"]
+        )
         if success:
             # Wait a bit and then refresh data
             await asyncio.sleep(2)
             await self.coordinator.async_request_refresh()
         else:
-            _LOGGER.error("Failed to enable automatic mode")
+            _LOGGER.error("Failed to enable flexibility")
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the switch off (enable manual mode)."""
-        success = await self._api.update_flexibility_mode("NONE")
+        success = await self._api.update_flexibility_mode([])
         if success:
             # Wait a bit and then refresh data
             await asyncio.sleep(2)
             await self.coordinator.async_request_refresh()
         else:
-            _LOGGER.error("Failed to enable manual mode")
+            _LOGGER.error("Failed to disable flexibility")
