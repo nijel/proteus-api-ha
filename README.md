@@ -18,6 +18,7 @@ Integrace pro Home Assistant umožňující ovládání a monitorování fotovol
 
 ### Přes HACS (doporučeno)
 
+1. V HACS tři tečky -> vlastní repozitáře -> zkopírovat URL adresu repozitáře na github: **https://github.com/nijel/proteus-api-ha**. Zvolit že to je **integrace** a **Přidat**.
 1. Otevřete HACS v Home Assistant
 1. Přejděte na **Integrations**
 1. Klikněte na **Explore & Download Repositories**
