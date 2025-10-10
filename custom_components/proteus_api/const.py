@@ -8,7 +8,7 @@ API_ENDPOINT = "inverters.detail,inverters.flexibilityRewardsSummary,inverters.c
 API_CONTROL_ENDPOINT = "inverters.controls.updateManualControl"
 API_ENABLED_ENDPOINT = "inverters.controls.updateControlEnabled"
 API_MODE_ENDPOINT = "inverters.controls.updateControlMode"
-API_FLEXIBILITY_ENDPOINT = "inverters.controls.updateFlexibilityMode"
+API_FLEXIBILITY_ENDPOINT = "inverters.controls.updateFlexibilityCapabilities"
 API_LOGIN_ENDPOINT = "users.loginWithEmailAndPassword"
 
 # Control types
