@@ -1,12 +1,6 @@
 {
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:best-practices"
-  ],
-  "automerge": true,
-  "automergeType": "pr",
-  "automergeStrategy": "rebase",
-  "platformAutomerge": true,
-  "pre-commit": {
-    "enabled": true
-  }
+    "github>WeblateOrg/meta:renovate"
+  ]
 }
