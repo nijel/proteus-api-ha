@@ -54,6 +54,9 @@ Integrace pro Home Assistant umožňující ovládání a monitorování fotovol
 - `sensor.proteus_obchodovani_flexibility_za_mesic` - Měsíční zisk z flexibility
 - `sensor.proteus_obchodovani_flexibility_celkem` - Celkový zisk z flexibility
 - `sensor.proteus_prikaz_flexibility` - Aktuální příkaz flexibility
+  - `UP_POWER` - Dodávka do sítě
+  - `DOWN_BATTERY_SOLAR_CURTAILMENT_POWER` - Odběr ze sítě
+  - `DOWN_SOLAR_CURTAILMENT_POWER` - Zákaz přetoků
 - `sensor.proteus_konec_flexibility` - Konec příkazu flexibility
 - `sensor.proteus_rezim_baterie` - Režim baterie
 - `sensor.proteus_zalozhni_rezim_baterie` - Záložní režim baterie
