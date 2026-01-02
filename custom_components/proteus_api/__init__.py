@@ -10,7 +10,7 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import DOMAIN
+from .const import DOMAIN, UPDATE_INTERVAL
 from .proteus_api import ProteusAPI
 
 _LOGGER = logging.getLogger(__name__)
@@ -31,7 +31,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER,
         name="proteus_api",
         update_method=api.get_data,
-        update_interval=timedelta(seconds=30),
+        update_interval=timedelta(seconds=UPDATE_INTERVAL),
     )
 
     await coordinator.async_config_entry_first_refresh()

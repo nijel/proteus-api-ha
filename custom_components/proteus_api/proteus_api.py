@@ -20,6 +20,7 @@ from .const import (
     API_FLEXIBILITY_ENDPOINT,
     API_LOGIN_ENDPOINT,
     API_MODE_ENDPOINT,
+    UPDATE_INTERVAL,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -79,7 +80,10 @@ class ProteusAPI:
     async def _get_client(self) -> RetryClient:
         session = await self._get_session()
         retry_options = ExponentialRetry(
-            factor=10, exceptions={ConnectionError, ClientConnectionError}
+            factor=2,
+            attempts=10,
+            max_timeout=UPDATE_INTERVAL,
+            exceptions={ConnectionError, ClientConnectionError},
         )
         return RetryClient(client_session=session, retry_options=retry_options)
 
