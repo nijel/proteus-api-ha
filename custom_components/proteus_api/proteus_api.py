@@ -20,6 +20,7 @@ from .const import (
     API_FLEXIBILITY_ENDPOINT,
     API_LOGIN_ENDPOINT,
     API_MODE_ENDPOINT,
+    COMMAND_NONE,
     UPDATE_INTERVAL,
 )
 
@@ -180,7 +181,7 @@ class ProteusAPI:
                     command_data["command"]["endAt"]
                 )
             else:
-                parsed["current_command"] = "NONE"
+                parsed["current_command"] = COMMAND_NONE
                 parsed["command_end"] = None
 
             # Current step metadata

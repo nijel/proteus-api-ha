@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import logging
 
 from homeassistant.components.sensor import (
@@ -11,11 +12,13 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfEnergy
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.event import async_track_point_in_time
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN
+from .const import COMMAND_NONE, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -154,10 +157,94 @@ class ProteusCommandSensor(ProteusBaseSensor):
     _attr_unique_id = "proteus_command"
     _attr_icon = "mdi:flash"
 
+    def __init__(self, coordinator, config_entry):
+        """Initialize the sensor."""
+        super().__init__(coordinator, config_entry)
+        self._cancel_time_tracker = None
+
     @property
     def native_value(self) -> str | None:
         """Return the state of the sensor."""
         return self.coordinator.data.get("current_command")
+
+    async def async_added_to_hass(self) -> None:
+        """Handle entity which will be added."""
+        await super().async_added_to_hass()
+        self._schedule_end_time_update()
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Handle entity removal."""
+        if self._cancel_time_tracker is not None:
+            self._cancel_time_tracker()
+            self._cancel_time_tracker = None
+        await super().async_will_remove_from_hass()
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        super()._handle_coordinator_update()
+        self._schedule_end_time_update()
+
+    @callback
+    def _schedule_end_time_update(self) -> None:
+        """Schedule an update when the command end time is reached."""
+        # Cancel any existing tracker
+        if self._cancel_time_tracker is not None:
+            self._cancel_time_tracker()
+            self._cancel_time_tracker = None
+
+        # Get the command end time
+        command_end = self.coordinator.data.get("command_end")
+        current_command = self.coordinator.data.get("current_command")
+
+        # Only schedule if we have a command that's not NONE and has an end time
+        if (
+            current_command
+            and current_command != COMMAND_NONE
+            and isinstance(command_end, datetime)
+        ):
+            # Convert to UTC for consistent comparison
+            if command_end.tzinfo is None:
+                # If naive, assume it's UTC
+                command_end_utc = command_end.replace(tzinfo=timezone.utc)
+            else:
+                # Convert timezone-aware datetime to UTC
+                command_end_utc = command_end.astimezone(timezone.utc)
+
+            # Only schedule if the end time is in the future
+            now_utc = dt_util.utcnow()
+            if command_end_utc > now_utc:
+                _LOGGER.debug(
+                    "Scheduling flexibility command state update at %s", command_end_utc
+                )
+                self._cancel_time_tracker = async_track_point_in_time(
+                    self.hass, self._async_end_time_reached, command_end_utc
+                )
+            else:
+                # End time has already passed, update immediately
+                _LOGGER.debug(
+                    "Flexibility command end time has passed, updating state to NONE immediately"
+                )
+                self._update_state_to_none()
+
+    @callback
+    def _update_state_to_none(self) -> None:
+        """Update the command state to NONE and clear the end time."""
+        # Update coordinator data directly without a full refresh
+        if self.coordinator.data:
+            # Create a copy to avoid modifying the original data
+            updated_data = dict(self.coordinator.data)
+            updated_data["current_command"] = COMMAND_NONE
+            updated_data["command_end"] = None
+            # Notify all listeners that the data has changed
+            self.coordinator.async_set_updated_data(updated_data)
+
+    @callback
+    def _async_end_time_reached(self, _now: datetime) -> None:
+        """Handle when the command end time is reached."""
+        _LOGGER.debug("Flexibility command end time reached, updating state to NONE")
+        self._cancel_time_tracker = None
+        self._update_state_to_none()
 
 
 class ProteusCommandEndSensor(ProteusBaseSensor):
