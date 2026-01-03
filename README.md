@@ -57,6 +57,7 @@ Integrace pro Home Assistant umožňující ovládání a monitorování fotovol
   - `UP_POWER` - Dodávka do sítě
   - `DOWN_BATTERY_SOLAR_CURTAILMENT_POWER` - Odběr ze sítě
   - `DOWN_SOLAR_CURTAILMENT_POWER` - Zákaz přetoků
+  - `NONE` - Žádný
 - `sensor.proteus_konec_flexibility` - Konec příkazu flexibility
 - `sensor.proteus_rezim_baterie` - Režim baterie
 - `sensor.proteus_zalozhni_rezim_baterie` - Záložní režim baterie
