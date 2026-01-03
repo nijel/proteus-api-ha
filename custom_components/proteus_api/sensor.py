@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 
 from homeassistant.components.sensor import (
@@ -198,19 +198,24 @@ class ProteusCommandSensor(ProteusBaseSensor):
 
         # Only schedule if we have a command that's not NONE and has an end time
         if current_command and current_command != "NONE" and command_end:
-            # Ensure command_end is timezone-aware
+            # Ensure command_end is timezone-aware and in UTC for comparison
             if isinstance(command_end, datetime):
+                # Convert to UTC for consistent comparison
                 if command_end.tzinfo is None:
-                    command_end = dt_util.as_local(command_end)
+                    # If naive, assume it's UTC
+                    command_end_utc = command_end.replace(tzinfo=timezone.utc)
+                else:
+                    # Convert timezone-aware datetime to UTC
+                    command_end_utc = command_end.astimezone(timezone.utc)
 
                 # Only schedule if the end time is in the future
-                now = dt_util.utcnow()
-                if command_end > now:
+                now_utc = dt_util.utcnow()
+                if command_end_utc > now_utc:
                     _LOGGER.debug(
-                        "Scheduling flexibility command state update at %s", command_end
+                        "Scheduling flexibility command state update at %s", command_end_utc
                     )
                     self._cancel_time_tracker = async_track_point_in_time(
-                        self.hass, self._async_end_time_reached, command_end
+                        self.hass, self._async_end_time_reached, command_end_utc
                     )
 
     @callback
