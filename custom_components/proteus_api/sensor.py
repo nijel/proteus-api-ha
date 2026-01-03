@@ -229,10 +229,12 @@ class ProteusCommandSensor(ProteusBaseSensor):
 
         # Update coordinator data directly without a full refresh
         if self.coordinator.data:
-            self.coordinator.data["current_command"] = COMMAND_NONE
-            self.coordinator.data["command_end"] = None
+            # Create a copy to avoid modifying the original data
+            updated_data = dict(self.coordinator.data)
+            updated_data["current_command"] = COMMAND_NONE
+            updated_data["command_end"] = None
             # Notify all listeners that the data has changed
-            self.coordinator.async_set_updated_data(self.coordinator.data)
+            self.coordinator.async_set_updated_data(updated_data)
 
 
 class ProteusCommandEndSensor(ProteusBaseSensor):
