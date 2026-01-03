@@ -18,7 +18,7 @@ from homeassistant.helpers.event import async_track_point_in_time
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN
+from .const import COMMAND_NONE, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -200,7 +200,7 @@ class ProteusCommandSensor(ProteusBaseSensor):
         # Only schedule if we have a command that's not NONE and has an end time
         if (
             current_command
-            and current_command != "NONE"
+            and current_command != COMMAND_NONE
             and isinstance(command_end, datetime)
         ):
             # Convert to UTC for consistent comparison
