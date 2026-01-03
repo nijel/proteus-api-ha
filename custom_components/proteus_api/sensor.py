@@ -224,9 +224,15 @@ class ProteusCommandSensor(ProteusBaseSensor):
     @callback
     def _async_end_time_reached(self, _now: datetime) -> None:
         """Handle when the command end time is reached."""
-        _LOGGER.debug("Flexibility command end time reached, requesting coordinator refresh")
+        _LOGGER.debug("Flexibility command end time reached, updating state to NONE")
         self._cancel_time_tracker = None
-        self.hass.async_create_task(self.coordinator.async_request_refresh())
+
+        # Update coordinator data directly without a full refresh
+        if self.coordinator.data:
+            self.coordinator.data["current_command"] = COMMAND_NONE
+            self.coordinator.data["command_end"] = None
+            # Notify all listeners that the data has changed
+            self.coordinator.async_set_updated_data(self.coordinator.data)
 
 
 class ProteusCommandEndSensor(ProteusBaseSensor):
