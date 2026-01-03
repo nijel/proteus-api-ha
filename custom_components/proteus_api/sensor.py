@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 import logging
 
 from homeassistant.components.sensor import (
@@ -11,9 +12,11 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfEnergy
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.event import async_track_point_in_time
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
 
@@ -154,10 +157,68 @@ class ProteusCommandSensor(ProteusBaseSensor):
     _attr_unique_id = "proteus_command"
     _attr_icon = "mdi:flash"
 
+    def __init__(self, coordinator, config_entry):
+        """Initialize the sensor."""
+        super().__init__(coordinator, config_entry)
+        self._cancel_time_tracker = None
+
     @property
     def native_value(self) -> str | None:
         """Return the state of the sensor."""
         return self.coordinator.data.get("current_command")
+
+    async def async_added_to_hass(self) -> None:
+        """Handle entity which will be added."""
+        await super().async_added_to_hass()
+        self._schedule_end_time_update()
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Handle entity removal."""
+        if self._cancel_time_tracker is not None:
+            self._cancel_time_tracker()
+            self._cancel_time_tracker = None
+        await super().async_will_remove_from_hass()
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        super()._handle_coordinator_update()
+        self._schedule_end_time_update()
+
+    def _schedule_end_time_update(self) -> None:
+        """Schedule an update when the command end time is reached."""
+        # Cancel any existing tracker
+        if self._cancel_time_tracker is not None:
+            self._cancel_time_tracker()
+            self._cancel_time_tracker = None
+
+        # Get the command end time
+        command_end = self.coordinator.data.get("command_end")
+        current_command = self.coordinator.data.get("current_command")
+
+        # Only schedule if we have a command that's not NONE and has an end time
+        if current_command and current_command != "NONE" and command_end:
+            # Ensure command_end is timezone-aware
+            if isinstance(command_end, datetime):
+                if command_end.tzinfo is None:
+                    command_end = dt_util.as_local(command_end)
+
+                # Only schedule if the end time is in the future
+                now = dt_util.utcnow()
+                if command_end > now:
+                    _LOGGER.debug(
+                        "Scheduling flexibility command state update at %s", command_end
+                    )
+                    self._cancel_time_tracker = async_track_point_in_time(
+                        self.hass, self._async_end_time_reached, command_end
+                    )
+
+    @callback
+    def _async_end_time_reached(self, _now: datetime) -> None:
+        """Handle when the command end time is reached."""
+        _LOGGER.debug("Flexibility command end time reached, requesting coordinator refresh")
+        self._cancel_time_tracker = None
+        self.hass.async_create_task(self.coordinator.async_request_refresh())
 
 
 class ProteusCommandEndSensor(ProteusBaseSensor):
