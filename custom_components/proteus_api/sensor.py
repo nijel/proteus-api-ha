@@ -185,6 +185,7 @@ class ProteusCommandSensor(ProteusBaseSensor):
         super()._handle_coordinator_update()
         self._schedule_end_time_update()
 
+    @callback
     def _schedule_end_time_update(self) -> None:
         """Schedule an update when the command end time is reached."""
         # Cancel any existing tracker
@@ -197,26 +198,28 @@ class ProteusCommandSensor(ProteusBaseSensor):
         current_command = self.coordinator.data.get("current_command")
 
         # Only schedule if we have a command that's not NONE and has an end time
-        if current_command and current_command != "NONE" and command_end:
-            # Ensure command_end is timezone-aware and in UTC for comparison
-            if isinstance(command_end, datetime):
-                # Convert to UTC for consistent comparison
-                if command_end.tzinfo is None:
-                    # If naive, assume it's UTC
-                    command_end_utc = command_end.replace(tzinfo=timezone.utc)
-                else:
-                    # Convert timezone-aware datetime to UTC
-                    command_end_utc = command_end.astimezone(timezone.utc)
+        if (
+            current_command
+            and current_command != "NONE"
+            and isinstance(command_end, datetime)
+        ):
+            # Convert to UTC for consistent comparison
+            if command_end.tzinfo is None:
+                # If naive, assume it's UTC
+                command_end_utc = command_end.replace(tzinfo=timezone.utc)
+            else:
+                # Convert timezone-aware datetime to UTC
+                command_end_utc = command_end.astimezone(timezone.utc)
 
-                # Only schedule if the end time is in the future
-                now_utc = dt_util.utcnow()
-                if command_end_utc > now_utc:
-                    _LOGGER.debug(
-                        "Scheduling flexibility command state update at %s", command_end_utc
-                    )
-                    self._cancel_time_tracker = async_track_point_in_time(
-                        self.hass, self._async_end_time_reached, command_end_utc
-                    )
+            # Only schedule if the end time is in the future
+            now_utc = dt_util.utcnow()
+            if command_end_utc > now_utc:
+                _LOGGER.debug(
+                    "Scheduling flexibility command state update at %s", command_end_utc
+                )
+                self._cancel_time_tracker = async_track_point_in_time(
+                    self.hass, self._async_end_time_reached, command_end_utc
+                )
 
     @callback
     def _async_end_time_reached(self, _now: datetime) -> None:
