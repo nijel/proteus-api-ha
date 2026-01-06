@@ -76,6 +76,8 @@ class ProteusFlexibilityStatusSensor(ProteusBaseSensor):
     @property
     def native_value(self):
         """Return the native value of the sensor."""
+        if self.coordinator.data is None:
+            return None
         return self.coordinator.data.get("flexibility_state")
 
 
@@ -89,6 +91,8 @@ class ProteusModeSensor(ProteusBaseSensor):
     @property
     def native_value(self) -> str | None:
         """Return the state of the sensor."""
+        if self.coordinator.data is None:
+            return None
         return self.coordinator.data.get("control_mode")
 
 
@@ -102,6 +106,8 @@ class ProteusFlexibilityModeSensor(ProteusBaseSensor):
     @property
     def native_value(self) -> str | None:
         """Return the state of the sensor."""
+        if self.coordinator.data is None:
+            return None
         return self.coordinator.data.get("flexibility_mode")
 
 
@@ -117,6 +123,8 @@ class ProteusFlexibilityTodaySensor(ProteusBaseSensor):
     @property
     def native_value(self) -> float | None:
         """Return the state of the sensor."""
+        if self.coordinator.data is None:
+            return None
         return self.coordinator.data.get("flexibility_today")
 
 
@@ -132,6 +140,8 @@ class ProteusFlexibilityMonthSensor(ProteusBaseSensor):
     @property
     def native_value(self) -> float | None:
         """Return the state of the sensor."""
+        if self.coordinator.data is None:
+            return None
         return self.coordinator.data.get("flexibility_month")
 
 
@@ -147,6 +157,8 @@ class ProteusFlexibilityTotalSensor(ProteusBaseSensor):
     @property
     def native_value(self) -> float | None:
         """Return the state of the sensor."""
+        if self.coordinator.data is None:
+            return None
         return self.coordinator.data.get("flexibility_total")
 
 
@@ -165,6 +177,8 @@ class ProteusCommandSensor(ProteusBaseSensor):
     @property
     def native_value(self) -> str | None:
         """Return the state of the sensor."""
+        if self.coordinator.data is None:
+            return None
         return self.coordinator.data.get("current_command")
 
     async def async_added_to_hass(self) -> None:
@@ -194,6 +208,8 @@ class ProteusCommandSensor(ProteusBaseSensor):
             self._cancel_time_tracker = None
 
         # Get the command end time
+        if self.coordinator.data is None:
+            return
         command_end = self.coordinator.data.get("command_end")
         current_command = self.coordinator.data.get("current_command")
 
@@ -258,6 +274,8 @@ class ProteusCommandEndSensor(ProteusBaseSensor):
     @property
     def native_value(self) -> str | None:
         """Return the state of the sensor."""
+        if self.coordinator.data is None:
+            return None
         return self.coordinator.data.get("command_end")
 
 
@@ -271,6 +289,8 @@ class ProteusBatteryModeSensor(ProteusBaseSensor):
     @property
     def native_value(self) -> str | None:
         """Return the state of the sensor."""
+        if self.coordinator.data is None:
+            return None
         return self.coordinator.data.get("flexalgo_battery")
 
 
@@ -284,6 +304,8 @@ class ProteusBatteryFallbackSensor(ProteusBaseSensor):
     @property
     def native_value(self) -> str | None:
         """Return the state of the sensor."""
+        if self.coordinator.data is None:
+            return None
         return self.coordinator.data.get("flexalgo_battery_fallback")
 
 
@@ -297,6 +319,8 @@ class ProteusPvModeSensor(ProteusBaseSensor):
     @property
     def native_value(self) -> str | None:
         """Return the state of the sensor."""
+        if self.coordinator.data is None:
+            return None
         return self.coordinator.data.get("flexalgo_pv")
 
 
@@ -311,6 +335,8 @@ class ProteusTargetSocSensor(ProteusBaseSensor):
     @property
     def native_value(self) -> float | None:
         """Return the state of the sensor."""
+        if self.coordinator.data is None:
+            return None
         return self.coordinator.data.get("target_soc")
 
 
@@ -327,6 +353,8 @@ class ProteusPredictedProductionSensor(ProteusBaseSensor):
     @property
     def native_value(self) -> float | None:
         """Return the state of the sensor."""
+        if self.coordinator.data is None:
+            return None
         return self.coordinator.data.get("predicted_production")
 
 
@@ -343,4 +371,6 @@ class ProteusPredictedConsumptionSensor(ProteusBaseSensor):
     @property
     def native_value(self) -> float | None:
         """Return the state of the sensor."""
+        if self.coordinator.data is None:
+            return None
         return self.coordinator.data.get("predicted_consumption")

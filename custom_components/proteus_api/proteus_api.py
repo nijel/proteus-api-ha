@@ -84,7 +84,7 @@ class ProteusAPI:
             factor=2,
             attempts=10,
             max_timeout=UPDATE_INTERVAL,
-            exceptions={ConnectionError, ClientConnectionError},
+            exceptions={ConnectionError, ClientConnectionError, TimeoutError},
         )
         return RetryClient(client_session=session, retry_options=retry_options)
 

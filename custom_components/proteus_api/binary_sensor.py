@@ -75,5 +75,7 @@ class ProteusManualControlBinarySensor(ProteusBaseBinarySensor):
     @property
     def is_on(self) -> bool | None:
         """Return true if the binary sensor is on."""
+        if self.coordinator.data is None:
+            return None
         manual_controls = self.coordinator.data.get("manual_controls", {})
         return manual_controls.get(self._control_type, False)
