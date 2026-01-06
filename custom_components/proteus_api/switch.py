@@ -85,6 +85,8 @@ class ProteusManualControlSwitch(ProteusBaseSwitch):
     @property
     def available(self) -> bool:
         """Return entity availability."""
+        if self.coordinator.data is None:
+            return False
         return (
             self.coordinator.data.get("control_enabled")
             and self.coordinator.data.get("control_mode") == "MANUAL"
@@ -93,6 +95,8 @@ class ProteusManualControlSwitch(ProteusBaseSwitch):
     @property
     def is_on(self) -> bool | None:
         """Return true if the switch is on."""
+        if self.coordinator.data is None:
+            return None
         manual_controls = self.coordinator.data.get("manual_controls", {})
         return manual_controls.get(self._control_type, False)
 
@@ -130,6 +134,8 @@ class ProteusControlEnabledSwitch(ProteusBaseSwitch):
     @property
     def is_on(self) -> bool | None:
         """Return true if the switch is on (automatic enabled)."""
+        if self.coordinator.data is None:
+            return None
         return self.coordinator.data.get("control_enabled")
 
     async def async_turn_on(self, **kwargs: Any) -> None:
@@ -166,11 +172,15 @@ class ProteusAutomaticModeSwitch(ProteusBaseSwitch):
     @property
     def is_on(self) -> bool | None:
         """Return true if the switch is on (automatic mode)."""
+        if self.coordinator.data is None:
+            return None
         return self.coordinator.data.get("control_mode") == "AUTOMATIC"
 
     @property
     def available(self) -> bool:
         """Return entity availability."""
+        if self.coordinator.data is None:
+            return False
         return self.coordinator.data.get("control_enabled")
 
     async def async_turn_on(self, **kwargs: Any) -> None:
@@ -207,11 +217,15 @@ class ProteusFlexibilityModeSwitch(ProteusBaseSwitch):
     @property
     def is_on(self) -> bool | None:
         """Return true if the switch is on (automatic mode)."""
+        if self.coordinator.data is None:
+            return None
         return self.coordinator.data.get("flexibility_capabilities") != []
 
     @property
     def available(self) -> bool:
         """Return entity availability."""
+        if self.coordinator.data is None:
+            return False
         return self.coordinator.data.get("control_enabled")
 
     async def async_turn_on(self, **kwargs: Any) -> None:
