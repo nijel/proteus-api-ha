@@ -7,14 +7,14 @@ Integrace pro Home Assistant umožňující ovládání a monitorování fotovol
 ## Varování
 
 - Používá nestabilní a nedokumentované API, takže se při změnách může rozbít.
-- Stav se načítá jednou za 30 sekund.
+- Stav se načítá jednou za 10 sekund.
 
 ## Funkce
 
 - **Sensory** - sledování stavu flexibility, zisku z flexibility, předpovědí výroby a spotřeby
 - **Binární sensory** - sledování stavu manuálních ovládání
 - **Přepínače** - ovládání manuálních funkcí a automatického režimu
-- **Automatická aktualizace** - data se aktualizují každých 30 sekund
+- **Automatická aktualizace** - data se aktualizují každých 10 sekund
 
 ## Instalace
 
