@@ -7,7 +7,7 @@ Integrace pro Home Assistant umožňující ovládání a monitorování fotovol
 ## Varování
 
 - Používá nestabilní a nedokumentované API, takže se při změnách může rozbít.
-- Stav se načítá jednou za 30 sekund.
+- Stav se načítá jednou za 10 sekund.
 
 ## Funkce
 
