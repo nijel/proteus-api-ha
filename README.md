@@ -14,7 +14,7 @@ Integrace pro Home Assistant umožňující ovládání a monitorování fotovol
 - **Sensory** - sledování stavu flexibility, zisku z flexibility, předpovědí výroby a spotřeby
 - **Binární sensory** - sledování stavu manuálních ovládání
 - **Přepínače** - ovládání manuálních funkcí a automatického režimu
-- **Automatická aktualizace** - data se aktualizují každých 30 sekund
+- **Automatická aktualizace** - data se aktualizují každých 10 sekund
 
 ## Instalace
 
