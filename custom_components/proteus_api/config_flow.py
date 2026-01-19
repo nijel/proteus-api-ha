@@ -43,7 +43,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     """Validate the user input allows us to connect."""
     # Validate inverter ID format: 25 lowercase letters and digits
     inverter_id = data["inverter_id"]
-    if not re.match(r"^[a-z0-9]{25}$", inverter_id):
+    if not re.fullmatch(r"[a-z0-9]{25}", inverter_id):
         raise InvalidInverterId
 
     api = ProteusAPI(inverter_id, data["email"], data["password"])
