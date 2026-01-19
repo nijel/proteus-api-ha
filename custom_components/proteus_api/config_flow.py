@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 import voluptuous as vol
@@ -28,7 +29,12 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
 
 async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
     """Validate the user input allows us to connect."""
-    api = ProteusAPI(data["inverter_id"], data["email"], data["password"])
+    # Validate inverter ID format: 25 lowercase letters and digits
+    inverter_id = data["inverter_id"]
+    if not re.match(r"^[a-z0-9]{25}$", inverter_id):
+        raise InvalidInverterId
+
+    api = ProteusAPI(inverter_id, data["email"], data["password"])
 
     try:
         # Test the connection using executor job for synchronous API
@@ -39,7 +45,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     if not result:
         raise InvalidAuth
 
-    return {"title": f"Proteus API ({data['inverter_id'][:8]}...)"}
+    return {"title": f"Proteus API ({inverter_id[:8]}...)"}
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -65,6 +71,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
         try:
             info = await validate_input(self.hass, user_input)
+        except InvalidInverterId:
+            errors["inverter_id"] = "invalid_inverter_id"
         except CannotConnect:
             errors["base"] = "cannot_connect"
         except InvalidAuth:
@@ -78,6 +86,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
         )
+
+
+class InvalidInverterId(HomeAssistantError):
+    """Error to indicate the inverter ID format is invalid."""
 
 
 class CannotConnect(HomeAssistantError):
