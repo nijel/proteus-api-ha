@@ -49,6 +49,9 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     if not re.fullmatch(INVERTER_ID_PATTERN, inverter_id):
         raise InvalidInverterId
 
+    # Update data with stripped inverter ID
+    data["inverter_id"] = inverter_id
+
     api = ProteusAPI(inverter_id, data["email"], data["password"])
 
     try:
