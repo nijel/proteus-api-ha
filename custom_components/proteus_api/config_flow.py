@@ -27,6 +27,18 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
 )
 
 
+class InvalidInverterId(HomeAssistantError):
+    """Error to indicate the inverter ID format is invalid."""
+
+
+class CannotConnect(HomeAssistantError):
+    """Error to indicate we cannot connect."""
+
+
+class InvalidAuth(HomeAssistantError):
+    """Error to indicate there is invalid auth."""
+
+
 async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
     """Validate the user input allows us to connect."""
     # Validate inverter ID format: 25 lowercase letters and digits
@@ -86,15 +98,3 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
         )
-
-
-class InvalidInverterId(HomeAssistantError):
-    """Error to indicate the inverter ID format is invalid."""
-
-
-class CannotConnect(HomeAssistantError):
-    """Error to indicate we cannot connect."""
-
-
-class InvalidAuth(HomeAssistantError):
-    """Error to indicate there is invalid auth."""
