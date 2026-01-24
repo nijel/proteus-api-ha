@@ -173,6 +173,7 @@ class ProteusCommandSensor(ProteusBaseSensor):
         """Initialize the sensor."""
         super().__init__(coordinator, config_entry)
         self._cancel_time_tracker = None
+        self._local_end_time = None
 
     @property
     def native_value(self) -> str | None:
@@ -196,6 +197,28 @@ class ProteusCommandSensor(ProteusBaseSensor):
     @callback
     def _handle_coordinator_update(self) -> None:
         """Handle updated data from the coordinator."""
+        # Check if we have a locally tracked end time that has passed
+        if self._local_end_time is not None:
+            now_utc = dt_util.utcnow()
+            if now_utc >= self._local_end_time:
+                # The command should be NONE now, don't let coordinator overwrite it
+                if self.coordinator.data:
+                    data = self.coordinator.data
+                    # Only override if API still shows an active command
+                    if data.get("current_command") != COMMAND_NONE:
+                        _LOGGER.debug(
+                            "Preventing coordinator from overwriting local NONE state "
+                            "(end time %s has passed)", self._local_end_time
+                        )
+                        # Update the data to keep our local NONE state
+                        updated_data = dict(data)
+                        updated_data["current_command"] = COMMAND_NONE
+                        updated_data["command_end"] = None
+                        self.coordinator.async_set_updated_data(updated_data)
+                    else:
+                        # API now agrees the command is NONE, clear our tracking
+                        self._local_end_time = None
+        
         super()._handle_coordinator_update()
         self._schedule_end_time_update()
 
@@ -227,6 +250,9 @@ class ProteusCommandSensor(ProteusBaseSensor):
                 # Convert timezone-aware datetime to UTC
                 command_end_utc = command_end.astimezone(timezone.utc)
 
+            # Track the end time for race condition prevention
+            self._local_end_time = command_end_utc
+
             # Only schedule if the end time is in the future
             now_utc = dt_util.utcnow()
             if command_end_utc > now_utc:
@@ -237,20 +263,33 @@ class ProteusCommandSensor(ProteusBaseSensor):
                     self.hass, self._async_end_time_reached, command_end_utc
                 )
             else:
-                # End time has already passed, request a coordinator refresh
+                # End time has already passed, update immediately
                 _LOGGER.debug(
-                    "Flexibility command end time has passed, requesting coordinator refresh"
+                    "Flexibility command end time has passed, updating state to NONE immediately"
                 )
-                self.hass.async_create_task(self.coordinator.async_request_refresh())
+                self._update_state_to_none()
+        else:
+            # No active command, clear the local end time
+            self._local_end_time = None
+
+    @callback
+    def _update_state_to_none(self) -> None:
+        """Update the command state to NONE and clear the end time."""
+        # Update coordinator data directly without a full refresh
+        if self.coordinator.data:
+            # Create a copy to avoid modifying the original data
+            updated_data = dict(self.coordinator.data)
+            updated_data["current_command"] = COMMAND_NONE
+            updated_data["command_end"] = None
+            # Notify all listeners that the data has changed
+            self.coordinator.async_set_updated_data(updated_data)
 
     @callback
     def _async_end_time_reached(self, _now: datetime) -> None:
         """Handle when the command end time is reached."""
-        _LOGGER.debug("Flexibility command end time reached, requesting coordinator refresh")
+        _LOGGER.debug("Flexibility command end time reached, updating state to NONE")
         self._cancel_time_tracker = None
-        # Request a coordinator refresh to get the latest state from the API
-        # This avoids race conditions with regular updates
-        self.hass.async_create_task(self.coordinator.async_request_refresh())
+        self._update_state_to_none()
 
 
 class ProteusCommandEndSensor(ProteusBaseSensor):
