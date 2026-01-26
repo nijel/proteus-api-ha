@@ -208,7 +208,8 @@ class ProteusCommandSensor(ProteusBaseSensor):
                     if data.get("current_command") != COMMAND_NONE:
                         _LOGGER.debug(
                             "Preventing coordinator from overwriting local NONE state "
-                            "(end time %s has passed)", self._local_end_time
+                            "(end time %s has passed)",
+                            self._local_end_time,
                         )
                         # Update the data to keep our local NONE state
                         updated_data = dict(data)
@@ -218,7 +219,7 @@ class ProteusCommandSensor(ProteusBaseSensor):
                     else:
                         # API now agrees the command is NONE, clear our tracking
                         self._local_end_time = None
-        
+
         super()._handle_coordinator_update()
         self._schedule_end_time_update()
 
