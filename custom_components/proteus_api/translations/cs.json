@@ -10,7 +10,7 @@
           "password": "Heslo"
         },
         "data_description": {
-          "inverter_id": "ID invertoru z URL (např. z https://proteus.deltagreen.cz/cs/device/inverter/XXX)",
+          "inverter_id": "ID invertoru z URL (např. z {example_url})",
           "password": "Přihlašování heslem musí být nastaveno."
         }
       }

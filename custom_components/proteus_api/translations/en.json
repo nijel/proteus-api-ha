@@ -10,7 +10,7 @@
           "password": "Password"
         },
         "data_description": {
-          "inverter_id": "Inverter ID from URL (e.g. from https://proteus.deltagreen.cz/cs/device/inverter/XXX)",
+          "inverter_id": "Inverter ID from URL (e.g. from {example_url})",
           "password": "Password authentication has to be configured."
         }
       }

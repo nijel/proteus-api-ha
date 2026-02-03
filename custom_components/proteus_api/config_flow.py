@@ -80,9 +80,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 step_id="user",
                 data_schema=STEP_USER_DATA_SCHEMA,
                 description_placeholders={
-                    "inverter_id_help": "ID invertoru z URL (např. z https://proteus.deltagreen.cz/cs/device/inverter/XXX)",
-                    "email_help": "E-mail",
-                    "password_help": "Heslo, musíte mít nastavené přihlašování přes heslo",
+                    "example_url": "https://proteus.deltagreen.cz/cs/device/inverter/XXX",
                 },
             )
 
