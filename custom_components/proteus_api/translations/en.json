@@ -18,7 +18,7 @@
     "error": {
       "cannot_connect": "Cannot connect to Proteus API",
       "invalid_auth": "Invalid authentication credentials",
-      "invalid_inverter_id": "Inverter ID must be exactly 25 lowercase letters and digits",
+      "invalid_inverter_id": "Inverter ID must be lowercase letters and digits",
       "unknown": "Unexpected error"
     },
     "abort": {

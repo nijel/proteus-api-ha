@@ -18,8 +18,8 @@ from .proteus_api import ProteusAPI
 
 _LOGGER = logging.getLogger(__name__)
 
-# Inverter ID must be exactly 25 lowercase letters and digits
-INVERTER_ID_PATTERN = r"[a-z0-9]{25}"
+# Inverter ID must be exactly 24-25 lowercase letters and digits
+INVERTER_ID_PATTERN = r"[a-z0-9]{24,25}"
 
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
@@ -44,7 +44,7 @@ class InvalidAuth(HomeAssistantError):
 
 async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
     """Validate the user input allows us to connect."""
-    # Validate inverter ID format: 25 lowercase letters and digits
+    # Validate inverter ID format
     inverter_id = data["inverter_id"].strip()
     if not re.fullmatch(INVERTER_ID_PATTERN, inverter_id):
         raise InvalidInverterId

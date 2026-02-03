@@ -18,7 +18,7 @@
     "error": {
       "cannot_connect": "Nelze se připojit k Proteus API",
       "invalid_auth": "Neplatné přihlašovací údaje",
-      "invalid_inverter_id": "ID invertoru musí obsahovat přesně 25 malých písmen a číslic",
+      "invalid_inverter_id": "ID invertoru musí obsahovat jen malá písmena a číslice",
       "unknown": "Neočekávaná chyba"
     },
     "abort": {
