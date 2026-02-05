@@ -50,6 +50,12 @@ class ProteusBaseBinarySensor(CoordinatorEntity, BinarySensorEntity):
             "model": "Proteus",
         }
 
+    def _get_unique_id(self, base_id: str) -> str:
+        """Get unique ID with optional inverter_id suffix for new installations."""
+        if self._config_entry.data.get("use_unique_id_suffix", False):
+            return f"{base_id}_{self._inverter_id}"
+        return base_id
+
 
 class ProteusManualControlBinarySensor(ProteusBaseBinarySensor):
     """Binary sensor for manual control states."""
@@ -59,11 +65,7 @@ class ProteusManualControlBinarySensor(ProteusBaseBinarySensor):
         super().__init__(coordinator, config_entry)
         self._control_type = control_type
         self._attr_name = f"Proteus {friendly_name}"
-        # Conditionally append inverter_id for new installations only
-        if config_entry.data.get("use_unique_id_suffix", False):
-            self._attr_unique_id = f"proteus_{control_type.lower()}_{self._inverter_id}"
-        else:
-            self._attr_unique_id = f"proteus_{control_type.lower()}"
+        self._attr_unique_id = self._get_unique_id(f"proteus_{control_type.lower()}")
         self._attr_icon = self._get_icon_for_control_type(control_type)
 
     def _get_icon_for_control_type(self, control_type: str) -> str:

@@ -66,6 +66,12 @@ class ProteusBaseSensor(CoordinatorEntity, SensorEntity):
             "model": "Proteus",
         }
 
+    def _get_unique_id(self, base_id: str) -> str:
+        """Get unique ID with optional inverter_id suffix for new installations."""
+        if self._config_entry.data.get("use_unique_id_suffix", False):
+            return f"{base_id}_{self._inverter_id}"
+        return base_id
+
 
 class ProteusFlexibilityStatusSensor(ProteusBaseSensor):
     """Flexibility status sensor."""
@@ -76,11 +82,7 @@ class ProteusFlexibilityStatusSensor(ProteusBaseSensor):
     def __init__(self, coordinator, config_entry):
         """Initialize the sensor."""
         super().__init__(coordinator, config_entry)
-        # Conditionally append inverter_id for new installations only
-        if config_entry.data.get("use_unique_id_suffix", False):
-            self._attr_unique_id = f"proteus_flex_status_{self._inverter_id}"
-        else:
-            self._attr_unique_id = "proteus_flex_status"
+        self._attr_unique_id = self._get_unique_id("proteus_flex_status")
 
     @property
     def native_value(self):
@@ -99,11 +101,7 @@ class ProteusModeSensor(ProteusBaseSensor):
     def __init__(self, coordinator, config_entry):
         """Initialize the sensor."""
         super().__init__(coordinator, config_entry)
-        # Conditionally append inverter_id for new installations only
-        if config_entry.data.get("use_unique_id_suffix", False):
-            self._attr_unique_id = f"proteus_mode_{self._inverter_id}"
-        else:
-            self._attr_unique_id = "proteus_mode"
+        self._attr_unique_id = self._get_unique_id("proteus_mode")
 
     @property
     def native_value(self) -> str | None:
@@ -122,11 +120,7 @@ class ProteusFlexibilityModeSensor(ProteusBaseSensor):
     def __init__(self, coordinator, config_entry):
         """Initialize the sensor."""
         super().__init__(coordinator, config_entry)
-        # Conditionally append inverter_id for new installations only
-        if config_entry.data.get("use_unique_id_suffix", False):
-            self._attr_unique_id = f"proteus_flexibility_mode_{self._inverter_id}"
-        else:
-            self._attr_unique_id = "proteus_flexibility_mode"
+        self._attr_unique_id = self._get_unique_id("proteus_flexibility_mode")
 
     @property
     def native_value(self) -> str | None:
@@ -147,11 +141,7 @@ class ProteusFlexibilityTodaySensor(ProteusBaseSensor):
     def __init__(self, coordinator, config_entry):
         """Initialize the sensor."""
         super().__init__(coordinator, config_entry)
-        # Conditionally append inverter_id for new installations only
-        if config_entry.data.get("use_unique_id_suffix", False):
-            self._attr_unique_id = f"proteus_flexibility_today_{self._inverter_id}"
-        else:
-            self._attr_unique_id = "proteus_flexibility_today"
+        self._attr_unique_id = self._get_unique_id("proteus_flexibility_today")
 
     @property
     def native_value(self) -> float | None:
@@ -172,11 +162,7 @@ class ProteusFlexibilityMonthSensor(ProteusBaseSensor):
     def __init__(self, coordinator, config_entry):
         """Initialize the sensor."""
         super().__init__(coordinator, config_entry)
-        # Conditionally append inverter_id for new installations only
-        if config_entry.data.get("use_unique_id_suffix", False):
-            self._attr_unique_id = f"proteus_flexibility_month_{self._inverter_id}"
-        else:
-            self._attr_unique_id = "proteus_flexibility_month"
+        self._attr_unique_id = self._get_unique_id("proteus_flexibility_month")
 
     @property
     def native_value(self) -> float | None:
@@ -197,11 +183,7 @@ class ProteusFlexibilityTotalSensor(ProteusBaseSensor):
     def __init__(self, coordinator, config_entry):
         """Initialize the sensor."""
         super().__init__(coordinator, config_entry)
-        # Conditionally append inverter_id for new installations only
-        if config_entry.data.get("use_unique_id_suffix", False):
-            self._attr_unique_id = f"proteus_flexibility_total_{self._inverter_id}"
-        else:
-            self._attr_unique_id = "proteus_flexibility_total"
+        self._attr_unique_id = self._get_unique_id("proteus_flexibility_total")
 
     @property
     def native_value(self) -> float | None:
@@ -220,11 +202,7 @@ class ProteusCommandSensor(ProteusBaseSensor):
     def __init__(self, coordinator, config_entry):
         """Initialize the sensor."""
         super().__init__(coordinator, config_entry)
-        # Conditionally append inverter_id for new installations only
-        if config_entry.data.get("use_unique_id_suffix", False):
-            self._attr_unique_id = f"proteus_command_{self._inverter_id}"
-        else:
-            self._attr_unique_id = "proteus_command"
+        self._attr_unique_id = self._get_unique_id("proteus_command")
         self._cancel_time_tracker = None
         self._local_end_time = None
 
@@ -356,11 +334,7 @@ class ProteusCommandEndSensor(ProteusBaseSensor):
     def __init__(self, coordinator, config_entry):
         """Initialize the sensor."""
         super().__init__(coordinator, config_entry)
-        # Conditionally append inverter_id for new installations only
-        if config_entry.data.get("use_unique_id_suffix", False):
-            self._attr_unique_id = f"proteus_command_end_{self._inverter_id}"
-        else:
-            self._attr_unique_id = "proteus_command_end"
+        self._attr_unique_id = self._get_unique_id("proteus_command_end")
 
     @property
     def native_value(self) -> str | None:
@@ -379,11 +353,7 @@ class ProteusBatteryModeSensor(ProteusBaseSensor):
     def __init__(self, coordinator, config_entry):
         """Initialize the sensor."""
         super().__init__(coordinator, config_entry)
-        # Conditionally append inverter_id for new installations only
-        if config_entry.data.get("use_unique_id_suffix", False):
-            self._attr_unique_id = f"proteus_flexalgo_battery_{self._inverter_id}"
-        else:
-            self._attr_unique_id = "proteus_flexalgo_battery"
+        self._attr_unique_id = self._get_unique_id("proteus_flexalgo_battery")
 
     @property
     def native_value(self) -> str | None:
@@ -402,13 +372,7 @@ class ProteusBatteryFallbackSensor(ProteusBaseSensor):
     def __init__(self, coordinator, config_entry):
         """Initialize the sensor."""
         super().__init__(coordinator, config_entry)
-        # Conditionally append inverter_id for new installations only
-        if config_entry.data.get("use_unique_id_suffix", False):
-            self._attr_unique_id = (
-                f"proteus_flexalgo_battery_fallback_{self._inverter_id}"
-            )
-        else:
-            self._attr_unique_id = "proteus_flexalgo_battery_fallback"
+        self._attr_unique_id = self._get_unique_id("proteus_flexalgo_battery_fallback")
 
     @property
     def native_value(self) -> str | None:
@@ -427,11 +391,7 @@ class ProteusPvModeSensor(ProteusBaseSensor):
     def __init__(self, coordinator, config_entry):
         """Initialize the sensor."""
         super().__init__(coordinator, config_entry)
-        # Conditionally append inverter_id for new installations only
-        if config_entry.data.get("use_unique_id_suffix", False):
-            self._attr_unique_id = f"proteus_flexalgo_pv_{self._inverter_id}"
-        else:
-            self._attr_unique_id = "proteus_flexalgo_pv"
+        self._attr_unique_id = self._get_unique_id("proteus_flexalgo_pv")
 
     @property
     def native_value(self) -> str | None:
@@ -451,11 +411,7 @@ class ProteusTargetSocSensor(ProteusBaseSensor):
     def __init__(self, coordinator, config_entry):
         """Initialize the sensor."""
         super().__init__(coordinator, config_entry)
-        # Conditionally append inverter_id for new installations only
-        if config_entry.data.get("use_unique_id_suffix", False):
-            self._attr_unique_id = f"proteus_target_soc_{self._inverter_id}"
-        else:
-            self._attr_unique_id = "proteus_target_soc"
+        self._attr_unique_id = self._get_unique_id("proteus_target_soc")
 
     @property
     def native_value(self) -> float | None:
@@ -477,11 +433,7 @@ class ProteusPredictedProductionSensor(ProteusBaseSensor):
     def __init__(self, coordinator, config_entry):
         """Initialize the sensor."""
         super().__init__(coordinator, config_entry)
-        # Conditionally append inverter_id for new installations only
-        if config_entry.data.get("use_unique_id_suffix", False):
-            self._attr_unique_id = f"proteus_predicted_production_{self._inverter_id}"
-        else:
-            self._attr_unique_id = "proteus_predicted_production"
+        self._attr_unique_id = self._get_unique_id("proteus_predicted_production")
 
     @property
     def native_value(self) -> float | None:
@@ -503,11 +455,7 @@ class ProteusPredictedConsumptionSensor(ProteusBaseSensor):
     def __init__(self, coordinator, config_entry):
         """Initialize the sensor."""
         super().__init__(coordinator, config_entry)
-        # Conditionally append inverter_id for new installations only
-        if config_entry.data.get("use_unique_id_suffix", False):
-            self._attr_unique_id = f"proteus_predicted_consumption_{self._inverter_id}"
-        else:
-            self._attr_unique_id = "proteus_predicted_consumption"
+        self._attr_unique_id = self._get_unique_id("proteus_predicted_consumption")
 
     @property
     def native_value(self) -> float | None:
