@@ -69,9 +69,13 @@ class ProteusManualControlSwitch(ProteusBaseSwitch):
         super().__init__(coordinator, config_entry, api)
         self._control_type = control_type
         self._attr_name = f"Proteus {friendly_name}"
-        self._attr_unique_id = (
-            f"proteus_switch_{control_type.lower()}_{self._inverter_id}"
-        )
+        # Conditionally append inverter_id for new installations only
+        if config_entry.data.get("use_unique_id_suffix", False):
+            self._attr_unique_id = (
+                f"proteus_switch_{control_type.lower()}_{self._inverter_id}"
+            )
+        else:
+            self._attr_unique_id = f"proteus_switch_{control_type.lower()}"
         self._attr_icon = self._get_icon_for_control_type(control_type)
 
     def _get_icon_for_control_type(self, control_type: str) -> str:
@@ -131,7 +135,11 @@ class ProteusControlEnabledSwitch(ProteusBaseSwitch):
         """Initialize the switch."""
         super().__init__(coordinator, config_entry, api)
         self._attr_name = "Proteus řízení FVE"
-        self._attr_unique_id = f"proteus_switch_control_enabled_{self._inverter_id}"
+        # Conditionally append inverter_id for new installations only
+        if config_entry.data.get("use_unique_id_suffix", False):
+            self._attr_unique_id = f"proteus_switch_control_enabled_{self._inverter_id}"
+        else:
+            self._attr_unique_id = "proteus_switch_control_enabled"
         self._attr_icon = "mdi:network"
 
     @property
@@ -169,7 +177,11 @@ class ProteusAutomaticModeSwitch(ProteusBaseSwitch):
         """Initialize the switch."""
         super().__init__(coordinator, config_entry, api)
         self._attr_name = "Proteus optimalizace algoritmem"
-        self._attr_unique_id = f"proteus_switch_automatic_mode_{self._inverter_id}"
+        # Conditionally append inverter_id for new installations only
+        if config_entry.data.get("use_unique_id_suffix", False):
+            self._attr_unique_id = f"proteus_switch_automatic_mode_{self._inverter_id}"
+        else:
+            self._attr_unique_id = "proteus_switch_automatic_mode"
         self._attr_icon = "mdi:creation"
 
     @property
@@ -214,7 +226,11 @@ class ProteusFlexibilityModeSwitch(ProteusBaseSwitch):
         """Initialize the switch."""
         super().__init__(coordinator, config_entry, api)
         self._attr_name = "Proteus obchodování flexibility"
-        self._attr_unique_id = f"proteus_switch_flexibility_mode_{self._inverter_id}"
+        # Conditionally append inverter_id for new installations only
+        if config_entry.data.get("use_unique_id_suffix", False):
+            self._attr_unique_id = f"proteus_switch_flexibility_mode_{self._inverter_id}"
+        else:
+            self._attr_unique_id = "proteus_switch_flexibility_mode"
         self._attr_icon = "mdi:robot"
 
     @property

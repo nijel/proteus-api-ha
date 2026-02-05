@@ -65,8 +65,11 @@ class ProteusBaseSensor(CoordinatorEntity, SensorEntity):
             "manufacturer": "Delta Green",
             "model": "Proteus",
         }
-        # Append inverter_id to unique_id set by child classes
-        if hasattr(self, "_attr_unique_id"):
+        # Append inverter_id to unique_id for new installations only
+        # This preserves backward compatibility for existing installations
+        if hasattr(self, "_attr_unique_id") and config_entry.data.get(
+            "use_unique_id_suffix", False
+        ):
             self._attr_unique_id = f"{self._attr_unique_id}_{self._inverter_id}"
 
 
