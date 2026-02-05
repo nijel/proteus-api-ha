@@ -58,16 +58,16 @@ class ProteusBaseSensor(CoordinatorEntity, SensorEntity):
         """Initialize the sensor."""
         super().__init__(coordinator)
         self._config_entry = config_entry
-        inverter_id = config_entry.data["inverter_id"]
+        self._inverter_id = config_entry.data["inverter_id"]
         self._attr_device_info = {
             "identifiers": {(DOMAIN, config_entry.entry_id)},
             "name": "Proteus Inverter",
             "manufacturer": "Delta Green",
             "model": "Proteus",
         }
-        # Update unique_id to include inverter_id if it's set as a class attribute
-        if hasattr(self, "_attr_unique_id") and self._attr_unique_id:
-            self._attr_unique_id = f"{self._attr_unique_id}_{inverter_id}"
+        # Append inverter_id to unique_id set by child classes
+        if hasattr(self, "_attr_unique_id"):
+            self._attr_unique_id = f"{self._attr_unique_id}_{self._inverter_id}"
 
 
 class ProteusFlexibilityStatusSensor(ProteusBaseSensor):
