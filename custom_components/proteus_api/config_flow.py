@@ -100,6 +100,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # Set unique ID based on inverter ID to allow multiple instances
             await self.async_set_unique_id(user_input["inverter_id"])
             self._abort_if_unique_id_configured()
+            # Add flag for new installations to use unique ID suffix
+            user_input["use_unique_id_suffix"] = True
             return self.async_create_entry(title=info["title"], data=user_input)
 
         return self.async_show_form(
