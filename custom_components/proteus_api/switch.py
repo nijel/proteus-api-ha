@@ -228,7 +228,9 @@ class ProteusFlexibilityModeSwitch(ProteusBaseSwitch):
         self._attr_name = "Proteus obchodování flexibility"
         # Conditionally append inverter_id for new installations only
         if config_entry.data.get("use_unique_id_suffix", False):
-            self._attr_unique_id = f"proteus_switch_flexibility_mode_{self._inverter_id}"
+            self._attr_unique_id = (
+                f"proteus_switch_flexibility_mode_{self._inverter_id}"
+            )
         else:
             self._attr_unique_id = "proteus_switch_flexibility_mode"
         self._attr_icon = "mdi:robot"
