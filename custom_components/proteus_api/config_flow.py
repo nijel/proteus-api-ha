@@ -97,6 +97,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             _LOGGER.exception("Unexpected exception")
             errors["base"] = "unknown"
         else:
+            # Set unique ID based on inverter ID to allow multiple instances
+            await self.async_set_unique_id(user_input["inverter_id"])
+            self._abort_if_unique_id_configured()
             return self.async_create_entry(title=info["title"], data=user_input)
 
         return self.async_show_form(

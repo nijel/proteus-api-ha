@@ -42,6 +42,7 @@ class ProteusBaseBinarySensor(CoordinatorEntity, BinarySensorEntity):
         """Initialize the binary sensor."""
         super().__init__(coordinator)
         self._config_entry = config_entry
+        self._inverter_id = config_entry.data["inverter_id"]
         self._attr_device_info = {
             "identifiers": {(DOMAIN, config_entry.entry_id)},
             "name": "Proteus Inverter",
@@ -58,7 +59,7 @@ class ProteusManualControlBinarySensor(ProteusBaseBinarySensor):
         super().__init__(coordinator, config_entry)
         self._control_type = control_type
         self._attr_name = f"Proteus {friendly_name}"
-        self._attr_unique_id = f"proteus_{control_type.lower()}"
+        self._attr_unique_id = f"proteus_{control_type.lower()}_{self._inverter_id}"
         self._attr_icon = self._get_icon_for_control_type(control_type)
 
     def _get_icon_for_control_type(self, control_type: str) -> str:
