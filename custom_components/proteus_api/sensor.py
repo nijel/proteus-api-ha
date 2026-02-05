@@ -58,6 +58,7 @@ class ProteusBaseSensor(CoordinatorEntity, SensorEntity):
         """Initialize the sensor."""
         super().__init__(coordinator)
         self._config_entry = config_entry
+        self._inverter_id = config_entry.data["inverter_id"]
         self._attr_device_info = {
             "identifiers": {(DOMAIN, config_entry.entry_id)},
             "name": "Proteus Inverter",
@@ -65,13 +66,23 @@ class ProteusBaseSensor(CoordinatorEntity, SensorEntity):
             "model": "Proteus",
         }
 
+    def _get_unique_id(self, base_id: str) -> str:
+        """Get unique ID with optional inverter_id suffix for new installations."""
+        if self._config_entry.data.get("use_unique_id_suffix", False):
+            return f"{base_id}_{self._inverter_id}"
+        return base_id
+
 
 class ProteusFlexibilityStatusSensor(ProteusBaseSensor):
     """Flexibility status sensor."""
 
     _attr_name = "Proteus flexibilita dostupná"
-    _attr_unique_id = "proteus_flex_status"
     _attr_icon = "mdi:lightning-bolt"
+
+    def __init__(self, coordinator, config_entry):
+        """Initialize the sensor."""
+        super().__init__(coordinator, config_entry)
+        self._attr_unique_id = self._get_unique_id("proteus_flex_status")
 
     @property
     def native_value(self):
@@ -85,8 +96,12 @@ class ProteusModeSensor(ProteusBaseSensor):
     """Mode sensor."""
 
     _attr_name = "Proteus režim"
-    _attr_unique_id = "proteus_mode"
     _attr_icon = "mdi:cog"
+
+    def __init__(self, coordinator, config_entry):
+        """Initialize the sensor."""
+        super().__init__(coordinator, config_entry)
+        self._attr_unique_id = self._get_unique_id("proteus_mode")
 
     @property
     def native_value(self) -> str | None:
@@ -100,8 +115,12 @@ class ProteusFlexibilityModeSensor(ProteusBaseSensor):
     """Flexibility mode sensor."""
 
     _attr_name = "Proteus režim flexibility"
-    _attr_unique_id = "proteus_flexibility_mode"
     _attr_icon = "mdi:cog"
+
+    def __init__(self, coordinator, config_entry):
+        """Initialize the sensor."""
+        super().__init__(coordinator, config_entry)
+        self._attr_unique_id = self._get_unique_id("proteus_flexibility_mode")
 
     @property
     def native_value(self) -> str | None:
@@ -115,10 +134,14 @@ class ProteusFlexibilityTodaySensor(ProteusBaseSensor):
     """Flexibility today sensor."""
 
     _attr_name = "Proteus obchodování flexibility dnes"
-    _attr_unique_id = "proteus_flexibility_today"
     _attr_native_unit_of_measurement = "Kč"
     _attr_device_class = SensorDeviceClass.MONETARY
     _attr_icon = "mdi:currency-czk"
+
+    def __init__(self, coordinator, config_entry):
+        """Initialize the sensor."""
+        super().__init__(coordinator, config_entry)
+        self._attr_unique_id = self._get_unique_id("proteus_flexibility_today")
 
     @property
     def native_value(self) -> float | None:
@@ -132,10 +155,14 @@ class ProteusFlexibilityMonthSensor(ProteusBaseSensor):
     """Flexibility month sensor."""
 
     _attr_name = "Proteus obchodování flexibility za měsíc"
-    _attr_unique_id = "proteus_flexibility_month"
     _attr_native_unit_of_measurement = "Kč"
     _attr_device_class = SensorDeviceClass.MONETARY
     _attr_icon = "mdi:currency-czk"
+
+    def __init__(self, coordinator, config_entry):
+        """Initialize the sensor."""
+        super().__init__(coordinator, config_entry)
+        self._attr_unique_id = self._get_unique_id("proteus_flexibility_month")
 
     @property
     def native_value(self) -> float | None:
@@ -149,10 +176,14 @@ class ProteusFlexibilityTotalSensor(ProteusBaseSensor):
     """Flexibility total sensor."""
 
     _attr_name = "Proteus obchodování flexibility celkem"
-    _attr_unique_id = "proteus_flexibility_total"
     _attr_native_unit_of_measurement = "Kč"
     _attr_device_class = SensorDeviceClass.MONETARY
     _attr_icon = "mdi:currency-czk"
+
+    def __init__(self, coordinator, config_entry):
+        """Initialize the sensor."""
+        super().__init__(coordinator, config_entry)
+        self._attr_unique_id = self._get_unique_id("proteus_flexibility_total")
 
     @property
     def native_value(self) -> float | None:
@@ -166,12 +197,12 @@ class ProteusCommandSensor(ProteusBaseSensor):
     """Command sensor."""
 
     _attr_name = "Proteus příkaz flexibility"
-    _attr_unique_id = "proteus_command"
     _attr_icon = "mdi:flash"
 
     def __init__(self, coordinator, config_entry):
         """Initialize the sensor."""
         super().__init__(coordinator, config_entry)
+        self._attr_unique_id = self._get_unique_id("proteus_command")
         self._cancel_time_tracker = None
         self._local_end_time = None
 
@@ -297,9 +328,13 @@ class ProteusCommandEndSensor(ProteusBaseSensor):
     """Command end sensor."""
 
     _attr_name = "Proteus konec flexibility"
-    _attr_unique_id = "proteus_command_end"
     _attr_device_class = SensorDeviceClass.TIMESTAMP
     _attr_icon = "mdi:clock-end"
+
+    def __init__(self, coordinator, config_entry):
+        """Initialize the sensor."""
+        super().__init__(coordinator, config_entry)
+        self._attr_unique_id = self._get_unique_id("proteus_command_end")
 
     @property
     def native_value(self) -> str | None:
@@ -313,8 +348,12 @@ class ProteusBatteryModeSensor(ProteusBaseSensor):
     """Battery mode sensor."""
 
     _attr_name = "Proteus režim baterie"
-    _attr_unique_id = "proteus_flexalgo_battery"
     _attr_icon = "mdi:battery"
+
+    def __init__(self, coordinator, config_entry):
+        """Initialize the sensor."""
+        super().__init__(coordinator, config_entry)
+        self._attr_unique_id = self._get_unique_id("proteus_flexalgo_battery")
 
     @property
     def native_value(self) -> str | None:
@@ -328,8 +367,12 @@ class ProteusBatteryFallbackSensor(ProteusBaseSensor):
     """Battery fallback sensor."""
 
     _attr_name = "Proteus záložní režim baterie"
-    _attr_unique_id = "proteus_flexalgo_battery_fallback"
     _attr_icon = "mdi:battery-outline"
+
+    def __init__(self, coordinator, config_entry):
+        """Initialize the sensor."""
+        super().__init__(coordinator, config_entry)
+        self._attr_unique_id = self._get_unique_id("proteus_flexalgo_battery_fallback")
 
     @property
     def native_value(self) -> str | None:
@@ -343,8 +386,12 @@ class ProteusPvModeSensor(ProteusBaseSensor):
     """PV mode sensor."""
 
     _attr_name = "Proteus režim výroby"
-    _attr_unique_id = "proteus_flexalgo_pv"
     _attr_icon = "mdi:solar-panel"
+
+    def __init__(self, coordinator, config_entry):
+        """Initialize the sensor."""
+        super().__init__(coordinator, config_entry)
+        self._attr_unique_id = self._get_unique_id("proteus_flexalgo_pv")
 
     @property
     def native_value(self) -> str | None:
@@ -358,9 +405,13 @@ class ProteusTargetSocSensor(ProteusBaseSensor):
     """Target SoC sensor."""
 
     _attr_name = "Proteus cílový SOC"
-    _attr_unique_id = "proteus_target_soc"
     _attr_native_unit_of_measurement = "%"
     _attr_icon = "mdi:battery-charging"
+
+    def __init__(self, coordinator, config_entry):
+        """Initialize the sensor."""
+        super().__init__(coordinator, config_entry)
+        self._attr_unique_id = self._get_unique_id("proteus_target_soc")
 
     @property
     def native_value(self) -> float | None:
@@ -374,11 +425,15 @@ class ProteusPredictedProductionSensor(ProteusBaseSensor):
     """Predicted production sensor."""
 
     _attr_name = "Proteus odhad výroby"
-    _attr_unique_id = "proteus_predicted_production"
     _attr_native_unit_of_measurement = UnitOfEnergy.WATT_HOUR
     _attr_device_class = SensorDeviceClass.ENERGY_STORAGE
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = "mdi:solar-power"
+
+    def __init__(self, coordinator, config_entry):
+        """Initialize the sensor."""
+        super().__init__(coordinator, config_entry)
+        self._attr_unique_id = self._get_unique_id("proteus_predicted_production")
 
     @property
     def native_value(self) -> float | None:
@@ -392,11 +447,15 @@ class ProteusPredictedConsumptionSensor(ProteusBaseSensor):
     """Predicted consumption sensor."""
 
     _attr_name = "Proteus odhad spotřeby"
-    _attr_unique_id = "proteus_predicted_consumption"
     _attr_native_unit_of_measurement = UnitOfEnergy.WATT_HOUR
     _attr_device_class = SensorDeviceClass.ENERGY_STORAGE
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = "mdi:home-lightning-bolt"
+
+    def __init__(self, coordinator, config_entry):
+        """Initialize the sensor."""
+        super().__init__(coordinator, config_entry)
+        self._attr_unique_id = self._get_unique_id("proteus_predicted_consumption")
 
     @property
     def native_value(self) -> float | None:
