@@ -115,9 +115,7 @@ class OptionsFlow(config_entries.OptionsFlow):
         """Get the options schema with current values."""
         return vol.Schema(
             {
-                vol.Required(
-                    "email", default=self.config_entry.data.get("email")
-                ): str,
+                vol.Required("email", default=self.config_entry.data.get("email")): str,
                 vol.Required("password"): str,
             }
         )
