@@ -36,22 +36,46 @@ async def async_setup_entry(
         coordinator = inverter_info["coordinator"]
         inverter = inverter_info["inverter"]
 
-        sensors.extend([
-            ProteusFlexibilityStatusSensor(coordinator, config_entry, inverter_id, inverter),
-            ProteusModeSensor(coordinator, config_entry, inverter_id, inverter),
-            ProteusFlexibilityModeSensor(coordinator, config_entry, inverter_id, inverter),
-            ProteusFlexibilityTodaySensor(coordinator, config_entry, inverter_id, inverter),
-            ProteusFlexibilityMonthSensor(coordinator, config_entry, inverter_id, inverter),
-            ProteusFlexibilityTotalSensor(coordinator, config_entry, inverter_id, inverter),
-            ProteusCommandSensor(coordinator, config_entry, inverter_id, inverter),
-            ProteusCommandEndSensor(coordinator, config_entry, inverter_id, inverter),
-            ProteusBatteryModeSensor(coordinator, config_entry, inverter_id, inverter),
-            ProteusBatteryFallbackSensor(coordinator, config_entry, inverter_id, inverter),
-            ProteusPvModeSensor(coordinator, config_entry, inverter_id, inverter),
-            ProteusTargetSocSensor(coordinator, config_entry, inverter_id, inverter),
-            ProteusPredictedProductionSensor(coordinator, config_entry, inverter_id, inverter),
-            ProteusPredictedConsumptionSensor(coordinator, config_entry, inverter_id, inverter),
-        ])
+        sensors.extend(
+            [
+                ProteusFlexibilityStatusSensor(
+                    coordinator, config_entry, inverter_id, inverter
+                ),
+                ProteusModeSensor(coordinator, config_entry, inverter_id, inverter),
+                ProteusFlexibilityModeSensor(
+                    coordinator, config_entry, inverter_id, inverter
+                ),
+                ProteusFlexibilityTodaySensor(
+                    coordinator, config_entry, inverter_id, inverter
+                ),
+                ProteusFlexibilityMonthSensor(
+                    coordinator, config_entry, inverter_id, inverter
+                ),
+                ProteusFlexibilityTotalSensor(
+                    coordinator, config_entry, inverter_id, inverter
+                ),
+                ProteusCommandSensor(coordinator, config_entry, inverter_id, inverter),
+                ProteusCommandEndSensor(
+                    coordinator, config_entry, inverter_id, inverter
+                ),
+                ProteusBatteryModeSensor(
+                    coordinator, config_entry, inverter_id, inverter
+                ),
+                ProteusBatteryFallbackSensor(
+                    coordinator, config_entry, inverter_id, inverter
+                ),
+                ProteusPvModeSensor(coordinator, config_entry, inverter_id, inverter),
+                ProteusTargetSocSensor(
+                    coordinator, config_entry, inverter_id, inverter
+                ),
+                ProteusPredictedProductionSensor(
+                    coordinator, config_entry, inverter_id, inverter
+                ),
+                ProteusPredictedConsumptionSensor(
+                    coordinator, config_entry, inverter_id, inverter
+                ),
+            ]
+        )
 
     async_add_entities(sensors)
 

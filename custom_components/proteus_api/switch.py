@@ -35,14 +35,32 @@ async def async_setup_entry(
         for control_type, friendly_name in CONTROL_TYPES.items():
             switches.append(
                 ProteusManualControlSwitch(
-                    coordinator, config_entry, api, inverter_id, inverter, control_type, friendly_name
+                    coordinator,
+                    config_entry,
+                    api,
+                    inverter_id,
+                    inverter,
+                    control_type,
+                    friendly_name,
                 )
             )
 
         # Add automatic mode switch
-        switches.append(ProteusControlEnabledSwitch(coordinator, config_entry, api, inverter_id, inverter))
-        switches.append(ProteusAutomaticModeSwitch(coordinator, config_entry, api, inverter_id, inverter))
-        switches.append(ProteusFlexibilityModeSwitch(coordinator, config_entry, api, inverter_id, inverter))
+        switches.append(
+            ProteusControlEnabledSwitch(
+                coordinator, config_entry, api, inverter_id, inverter
+            )
+        )
+        switches.append(
+            ProteusAutomaticModeSwitch(
+                coordinator, config_entry, api, inverter_id, inverter
+            )
+        )
+        switches.append(
+            ProteusFlexibilityModeSwitch(
+                coordinator, config_entry, api, inverter_id, inverter
+            )
+        )
 
     async_add_entities(switches)
 
@@ -73,7 +91,16 @@ class ProteusBaseSwitch(CoordinatorEntity, SwitchEntity):
 class ProteusManualControlSwitch(ProteusBaseSwitch):
     """Switch for manual control states."""
 
-    def __init__(self, coordinator, config_entry, api, inverter_id, inverter, control_type, friendly_name):
+    def __init__(
+        self,
+        coordinator,
+        config_entry,
+        api,
+        inverter_id,
+        inverter,
+        control_type,
+        friendly_name,
+    ):
         """Initialize the switch."""
         super().__init__(coordinator, config_entry, api, inverter_id, inverter)
         self._control_type = control_type
