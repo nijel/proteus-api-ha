@@ -57,10 +57,11 @@ class ProteusBaseSwitch(CoordinatorEntity, SwitchEntity):
         self._api = api
         self._inverter_id = inverter_id
         self._inverter = inverter
+        vendor_name = inverter.get("vendor", "Unknown")
         self._attr_device_info = {
             "identifiers": {(DOMAIN, inverter_id)},
-            "name": f"Proteus Inverter {inverter_id[:8]}",
-            "manufacturer": inverter.get("vendor", "Delta Green"),
+            "name": f"{vendor_name} Inverter",
+            "manufacturer": vendor_name,
             "model": "Proteus",
         }
 

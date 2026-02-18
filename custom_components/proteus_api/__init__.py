@@ -23,27 +23,40 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     email = entry.data["email"]
     password = entry.data["password"]
 
-    # Create a temporary API instance to fetch available inverters
-    # Empty string for inverter_id is acceptable as we only need to authenticate
-    temp_api = ProteusAPI("", email, password)
-    inverters = await temp_api.fetch_inverters()
+    # Check if this is an old config entry with inverter_id
+    if "inverter_id" in entry.data:
+        # Migration: old single-inverter config
+        inverter_id = entry.data["inverter_id"]
+        _LOGGER.info("Migrating old config entry with inverter_id %s", inverter_id)
 
-    if not inverters:
-        _LOGGER.error("No inverters found for account %s", email)
-        return False
-
-    # Create coordinators for all discovered inverters
-    inverter_data = {}
-    for inverter in inverters:
-        inverter_id = inverter["id"]
-        _LOGGER.info(
-            "Setting up inverter %s (%s)",
-            inverter_id,
-            inverter.get("vendor", "Unknown"),
-        )
-
-        # Create API instance for this inverter
+        # Create API instance for the single inverter
         api = ProteusAPI(inverter_id, email, password)
+
+        # Fetch inverter info for device metadata
+        temp_api = ProteusAPI("", email, password)
+        try:
+            inverters = await temp_api.fetch_inverters()
+            await temp_api.close()
+        except Exception:
+            _LOGGER.exception("Failed to fetch inverter info during migration")
+            inverters = []
+
+        # Find matching inverter or use default info
+        inverter = None
+        for inv in inverters:
+            if inv["id"] == inverter_id:
+                inverter = inv
+                break
+
+        if inverter is None:
+            # Fallback if we can't find the inverter in the list
+            inverter = {
+                "id": inverter_id,
+                "vendor": "Delta Green",
+                "featureFlags": [],
+                "controlMode": "UNKNOWN",
+                "controlEnabled": False,
+            }
 
         # Create coordinator for this inverter
         coordinator = ProteusDataUpdateCoordinator(
@@ -56,11 +69,54 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         await coordinator.async_config_entry_first_refresh()
 
-        inverter_data[inverter_id] = {
-            "coordinator": coordinator,
-            "api": api,
-            "inverter": inverter,
+        inverter_data = {
+            inverter_id: {
+                "coordinator": coordinator,
+                "api": api,
+                "inverter": inverter,
+            }
         }
+    else:
+        # New multi-inverter config
+        # Create a temporary API instance to fetch available inverters
+        # Empty string for inverter_id is acceptable as we only need to authenticate
+        temp_api = ProteusAPI("", email, password)
+        inverters = await temp_api.fetch_inverters()
+        await temp_api.close()
+
+        if not inverters:
+            _LOGGER.error("No inverters found for account %s", email)
+            return False
+
+        # Create coordinators for all discovered inverters
+        inverter_data = {}
+        for inverter in inverters:
+            inverter_id = inverter["id"]
+            _LOGGER.info(
+                "Setting up inverter %s (%s)",
+                inverter_id,
+                inverter.get("vendor", "Unknown"),
+            )
+
+            # Create API instance for this inverter
+            api = ProteusAPI(inverter_id, email, password)
+
+            # Create coordinator for this inverter
+            coordinator = ProteusDataUpdateCoordinator(
+                hass,
+                _LOGGER,
+                name=f"proteus_api_{inverter_id}",
+                update_method=api.get_data,
+                update_interval=timedelta(seconds=UPDATE_INTERVAL),
+            )
+
+            await coordinator.async_config_entry_first_refresh()
+
+            inverter_data[inverter_id] = {
+                "coordinator": coordinator,
+                "api": api,
+                "inverter": inverter,
+            }
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         "inverters": inverter_data,
@@ -75,7 +131,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
-        hass.data[DOMAIN].pop(entry.entry_id)
+        # Close all API sessions
+        entry_data = hass.data[DOMAIN].pop(entry.entry_id)
+        for inverter_id, inverter_info in entry_data["inverters"].items():
+            api = inverter_info["api"]
+            await api.close()
+            _LOGGER.debug("Closed API session for inverter %s", inverter_id)
 
     return unload_ok
 

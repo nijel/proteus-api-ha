@@ -47,10 +47,11 @@ class ProteusBaseBinarySensor(CoordinatorEntity, BinarySensorEntity):
         self._config_entry = config_entry
         self._inverter_id = inverter_id
         self._inverter = inverter
+        vendor_name = inverter.get("vendor", "Unknown")
         self._attr_device_info = {
             "identifiers": {(DOMAIN, inverter_id)},
-            "name": f"Proteus Inverter {inverter_id[:8]}",
-            "manufacturer": inverter.get("vendor", "Delta Green"),
+            "name": f"{vendor_name} Inverter",
+            "manufacturer": vendor_name,
             "model": "Proteus",
         }
 
