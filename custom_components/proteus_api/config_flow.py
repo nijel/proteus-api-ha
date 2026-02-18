@@ -93,8 +93,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors["base"] = "unknown"
         else:
             # Check if this account is already configured
-            # Use email as unique identifier since we're discovering all inverters
-            await self.async_set_unique_id(user_input["email"])
+            # Use normalized email as unique identifier since we're discovering all inverters
+            normalized_email = user_input["email"].strip().casefold()
+            await self.async_set_unique_id(normalized_email)
             self._abort_if_unique_id_configured()
 
             return self.async_create_entry(title=info["title"], data=user_input)
