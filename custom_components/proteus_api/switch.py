@@ -23,23 +23,26 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Proteus API switch based on a config entry."""
-    coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
-    api = hass.data[DOMAIN][config_entry.entry_id]["api"]
+    inverters_data = hass.data[DOMAIN][config_entry.entry_id]["inverters"]
 
     switches = []
+    for inverter_id, inverter_info in inverters_data.items():
+        coordinator = inverter_info["coordinator"]
+        api = inverter_info["api"]
+        inverter = inverter_info["inverter"]
 
-    # Add manual control switches
-    for control_type, friendly_name in CONTROL_TYPES.items():
-        switches.append(
-            ProteusManualControlSwitch(
-                coordinator, config_entry, api, control_type, friendly_name
+        # Add manual control switches
+        for control_type, friendly_name in CONTROL_TYPES.items():
+            switches.append(
+                ProteusManualControlSwitch(
+                    coordinator, config_entry, api, inverter_id, inverter, control_type, friendly_name
+                )
             )
-        )
 
-    # Add automatic mode switch
-    switches.append(ProteusControlEnabledSwitch(coordinator, config_entry, api))
-    switches.append(ProteusAutomaticModeSwitch(coordinator, config_entry, api))
-    switches.append(ProteusFlexibilityModeSwitch(coordinator, config_entry, api))
+        # Add automatic mode switch
+        switches.append(ProteusControlEnabledSwitch(coordinator, config_entry, api, inverter_id, inverter))
+        switches.append(ProteusAutomaticModeSwitch(coordinator, config_entry, api, inverter_id, inverter))
+        switches.append(ProteusFlexibilityModeSwitch(coordinator, config_entry, api, inverter_id, inverter))
 
     async_add_entities(switches)
 
@@ -47,32 +50,31 @@ async def async_setup_entry(
 class ProteusBaseSwitch(CoordinatorEntity, SwitchEntity):
     """Base class for Proteus switches."""
 
-    def __init__(self, coordinator, config_entry, api):
+    def __init__(self, coordinator, config_entry, api, inverter_id, inverter):
         """Initialize the switch."""
         super().__init__(coordinator)
         self._config_entry = config_entry
         self._api = api
-        self._inverter_id = config_entry.data["inverter_id"]
+        self._inverter_id = inverter_id
+        self._inverter = inverter
         self._attr_device_info = {
-            "identifiers": {(DOMAIN, config_entry.entry_id)},
-            "name": "Proteus Inverter",
-            "manufacturer": "Delta Green",
+            "identifiers": {(DOMAIN, inverter_id)},
+            "name": f"Proteus Inverter {inverter_id[:8]}",
+            "manufacturer": inverter.get("vendor", "Delta Green"),
             "model": "Proteus",
         }
 
     def _get_unique_id(self, base_id: str) -> str:
-        """Get unique ID with optional inverter_id suffix for new installations."""
-        if self._config_entry.data.get("use_unique_id_suffix", False):
-            return f"{base_id}_{self._inverter_id}"
-        return base_id
+        """Get unique ID with inverter_id suffix."""
+        return f"{base_id}_{self._inverter_id}"
 
 
 class ProteusManualControlSwitch(ProteusBaseSwitch):
     """Switch for manual control states."""
 
-    def __init__(self, coordinator, config_entry, api, control_type, friendly_name):
+    def __init__(self, coordinator, config_entry, api, inverter_id, inverter, control_type, friendly_name):
         """Initialize the switch."""
-        super().__init__(coordinator, config_entry, api)
+        super().__init__(coordinator, config_entry, api, inverter_id, inverter)
         self._control_type = control_type
         self._attr_name = f"Proteus {friendly_name}"
         self._attr_unique_id = self._get_unique_id(
@@ -133,9 +135,9 @@ class ProteusManualControlSwitch(ProteusBaseSwitch):
 class ProteusControlEnabledSwitch(ProteusBaseSwitch):
     """Switch for control enabled."""
 
-    def __init__(self, coordinator, config_entry, api):
+    def __init__(self, coordinator, config_entry, api, inverter_id, inverter):
         """Initialize the switch."""
-        super().__init__(coordinator, config_entry, api)
+        super().__init__(coordinator, config_entry, api, inverter_id, inverter)
         self._attr_name = "Proteus řízení FVE"
         self._attr_unique_id = self._get_unique_id("proteus_switch_control_enabled")
         self._attr_icon = "mdi:network"
@@ -171,9 +173,9 @@ class ProteusControlEnabledSwitch(ProteusBaseSwitch):
 class ProteusAutomaticModeSwitch(ProteusBaseSwitch):
     """Switch for automatic mode."""
 
-    def __init__(self, coordinator, config_entry, api):
+    def __init__(self, coordinator, config_entry, api, inverter_id, inverter):
         """Initialize the switch."""
-        super().__init__(coordinator, config_entry, api)
+        super().__init__(coordinator, config_entry, api, inverter_id, inverter)
         self._attr_name = "Proteus optimalizace algoritmem"
         self._attr_unique_id = self._get_unique_id("proteus_switch_automatic_mode")
         self._attr_icon = "mdi:creation"
@@ -216,9 +218,9 @@ class ProteusAutomaticModeSwitch(ProteusBaseSwitch):
 class ProteusFlexibilityModeSwitch(ProteusBaseSwitch):
     """Switch for flexibilith mode."""
 
-    def __init__(self, coordinator, config_entry, api):
+    def __init__(self, coordinator, config_entry, api, inverter_id, inverter):
         """Initialize the switch."""
-        super().__init__(coordinator, config_entry, api)
+        super().__init__(coordinator, config_entry, api, inverter_id, inverter)
         self._attr_name = "Proteus obchodování flexibility"
         self._attr_unique_id = self._get_unique_id("proteus_switch_flexibility_mode")
         self._attr_icon = "mdi:robot"

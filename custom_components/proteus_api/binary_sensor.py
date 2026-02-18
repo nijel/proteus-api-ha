@@ -21,16 +21,19 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Proteus API binary sensor based on a config entry."""
-    coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
+    inverters_data = hass.data[DOMAIN][config_entry.entry_id]["inverters"]
 
     binary_sensors = []
-
-    for control_type, friendly_name in CONTROL_TYPES.items():
-        binary_sensors.append(
-            ProteusManualControlBinarySensor(
-                coordinator, config_entry, control_type, friendly_name
+    for inverter_id, inverter_info in inverters_data.items():
+        coordinator = inverter_info["coordinator"]
+        inverter = inverter_info["inverter"]
+        
+        for control_type, friendly_name in CONTROL_TYPES.items():
+            binary_sensors.append(
+                ProteusManualControlBinarySensor(
+                    coordinator, config_entry, inverter_id, inverter, control_type, friendly_name
+                )
             )
-        )
 
     async_add_entities(binary_sensors)
 
@@ -38,31 +41,30 @@ async def async_setup_entry(
 class ProteusBaseBinarySensor(CoordinatorEntity, BinarySensorEntity):
     """Base class for Proteus binary sensors."""
 
-    def __init__(self, coordinator, config_entry):
+    def __init__(self, coordinator, config_entry, inverter_id, inverter):
         """Initialize the binary sensor."""
         super().__init__(coordinator)
         self._config_entry = config_entry
-        self._inverter_id = config_entry.data["inverter_id"]
+        self._inverter_id = inverter_id
+        self._inverter = inverter
         self._attr_device_info = {
-            "identifiers": {(DOMAIN, config_entry.entry_id)},
-            "name": "Proteus Inverter",
-            "manufacturer": "Delta Green",
+            "identifiers": {(DOMAIN, inverter_id)},
+            "name": f"Proteus Inverter {inverter_id[:8]}",
+            "manufacturer": inverter.get("vendor", "Delta Green"),
             "model": "Proteus",
         }
 
     def _get_unique_id(self, base_id: str) -> str:
-        """Get unique ID with optional inverter_id suffix for new installations."""
-        if self._config_entry.data.get("use_unique_id_suffix", False):
-            return f"{base_id}_{self._inverter_id}"
-        return base_id
+        """Get unique ID with inverter_id suffix."""
+        return f"{base_id}_{self._inverter_id}"
 
 
 class ProteusManualControlBinarySensor(ProteusBaseBinarySensor):
     """Binary sensor for manual control states."""
 
-    def __init__(self, coordinator, config_entry, control_type, friendly_name):
+    def __init__(self, coordinator, config_entry, inverter_id, inverter, control_type, friendly_name):
         """Initialize the binary sensor."""
-        super().__init__(coordinator, config_entry)
+        super().__init__(coordinator, config_entry, inverter_id, inverter)
         self._control_type = control_type
         self._attr_name = f"Proteus {friendly_name}"
         self._attr_unique_id = self._get_unique_id(f"proteus_{control_type.lower()}")

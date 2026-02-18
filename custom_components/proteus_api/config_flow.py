@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import re
 from typing import Any
 
 import voluptuous as vol
@@ -18,20 +17,12 @@ from .proteus_api import ProteusAPI
 
 _LOGGER = logging.getLogger(__name__)
 
-# Inverter ID must be exactly 24-25 lowercase letters and digits
-INVERTER_ID_PATTERN = r"[a-z0-9]{24,25}"
-
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
-        vol.Required("inverter_id"): str,
         vol.Required("email"): str,
         vol.Required("password"): str,
     }
 )
-
-
-class InvalidInverterId(HomeAssistantError):
-    """Error to indicate the inverter ID format is invalid."""
 
 
 class CannotConnect(HomeAssistantError):
@@ -44,26 +35,21 @@ class InvalidAuth(HomeAssistantError):
 
 async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
     """Validate the user input allows us to connect."""
-    # Validate inverter ID format
-    inverter_id = data["inverter_id"].strip()
-    if not re.fullmatch(INVERTER_ID_PATTERN, inverter_id):
-        raise InvalidInverterId
-
-    # Update data with stripped inverter ID
-    data["inverter_id"] = inverter_id
-
-    api = ProteusAPI(inverter_id, data["email"], data["password"])
+    # Create API instance without inverter_id to test credentials
+    api = ProteusAPI("", data["email"], data["password"])
 
     try:
-        # Test the connection using executor job for synchronous API
-        result = await hass.async_add_executor_job(api.get_data)
+        # Test the connection by fetching inverters list
+        inverters = await api.fetch_inverters()
     except Exception as ex:
         _LOGGER.error("Connection failed: %s", ex)
         raise CannotConnect from ex
-    if not result:
+    
+    if not inverters:
         raise InvalidAuth
-
-    return {"title": f"Proteus API ({inverter_id[:8]}...)"}
+    
+    # Store the count of inverters found
+    return {"title": f"Proteus API ({len(inverters)} inverter(s))"}
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -79,16 +65,11 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_show_form(
                 step_id="user",
                 data_schema=STEP_USER_DATA_SCHEMA,
-                description_placeholders={
-                    "example_url": "https://proteus.deltagreen.cz/cs/device/inverter/XXX",
-                },
             )
 
         errors = {}
         try:
             info = await validate_input(self.hass, user_input)
-        except InvalidInverterId:
-            errors["inverter_id"] = "invalid_inverter_id"
         except CannotConnect:
             errors["base"] = "cannot_connect"
         except InvalidAuth:
@@ -97,17 +78,11 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             _LOGGER.exception("Unexpected exception")
             errors["base"] = "unknown"
         else:
-            # Check for duplicate inverter_id in existing entries
-            # This handles both old entries (without unique_id) and new entries
-            for entry in self._async_current_entries():
-                if entry.data.get("inverter_id") == user_input["inverter_id"]:
-                    return self.async_abort(reason="already_configured")
-
-            # Set unique ID based on inverter ID to allow multiple instances
-            await self.async_set_unique_id(user_input["inverter_id"])
+            # Check if this account is already configured
+            # Use email as unique identifier since we're discovering all inverters
+            await self.async_set_unique_id(user_input["email"])
             self._abort_if_unique_id_configured()
-            # Add flag for new installations to use unique ID suffix
-            user_input["use_unique_id_suffix"] = True
+            
             return self.async_create_entry(title=info["title"], data=user_input)
 
         return self.async_show_form(

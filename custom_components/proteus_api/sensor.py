@@ -29,24 +29,29 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Proteus API sensor based on a config entry."""
-    coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
+    inverters_data = hass.data[DOMAIN][config_entry.entry_id]["inverters"]
 
-    sensors = [
-        ProteusFlexibilityStatusSensor(coordinator, config_entry),
-        ProteusModeSensor(coordinator, config_entry),
-        ProteusFlexibilityModeSensor(coordinator, config_entry),
-        ProteusFlexibilityTodaySensor(coordinator, config_entry),
-        ProteusFlexibilityMonthSensor(coordinator, config_entry),
-        ProteusFlexibilityTotalSensor(coordinator, config_entry),
-        ProteusCommandSensor(coordinator, config_entry),
-        ProteusCommandEndSensor(coordinator, config_entry),
-        ProteusBatteryModeSensor(coordinator, config_entry),
-        ProteusBatteryFallbackSensor(coordinator, config_entry),
-        ProteusPvModeSensor(coordinator, config_entry),
-        ProteusTargetSocSensor(coordinator, config_entry),
-        ProteusPredictedProductionSensor(coordinator, config_entry),
-        ProteusPredictedConsumptionSensor(coordinator, config_entry),
-    ]
+    sensors = []
+    for inverter_id, inverter_info in inverters_data.items():
+        coordinator = inverter_info["coordinator"]
+        inverter = inverter_info["inverter"]
+        
+        sensors.extend([
+            ProteusFlexibilityStatusSensor(coordinator, config_entry, inverter_id, inverter),
+            ProteusModeSensor(coordinator, config_entry, inverter_id, inverter),
+            ProteusFlexibilityModeSensor(coordinator, config_entry, inverter_id, inverter),
+            ProteusFlexibilityTodaySensor(coordinator, config_entry, inverter_id, inverter),
+            ProteusFlexibilityMonthSensor(coordinator, config_entry, inverter_id, inverter),
+            ProteusFlexibilityTotalSensor(coordinator, config_entry, inverter_id, inverter),
+            ProteusCommandSensor(coordinator, config_entry, inverter_id, inverter),
+            ProteusCommandEndSensor(coordinator, config_entry, inverter_id, inverter),
+            ProteusBatteryModeSensor(coordinator, config_entry, inverter_id, inverter),
+            ProteusBatteryFallbackSensor(coordinator, config_entry, inverter_id, inverter),
+            ProteusPvModeSensor(coordinator, config_entry, inverter_id, inverter),
+            ProteusTargetSocSensor(coordinator, config_entry, inverter_id, inverter),
+            ProteusPredictedProductionSensor(coordinator, config_entry, inverter_id, inverter),
+            ProteusPredictedConsumptionSensor(coordinator, config_entry, inverter_id, inverter),
+        ])
 
     async_add_entities(sensors)
 
@@ -54,23 +59,22 @@ async def async_setup_entry(
 class ProteusBaseSensor(CoordinatorEntity, SensorEntity):
     """Base class for Proteus sensors."""
 
-    def __init__(self, coordinator, config_entry):
+    def __init__(self, coordinator, config_entry, inverter_id, inverter):
         """Initialize the sensor."""
         super().__init__(coordinator)
         self._config_entry = config_entry
-        self._inverter_id = config_entry.data["inverter_id"]
+        self._inverter_id = inverter_id
+        self._inverter = inverter
         self._attr_device_info = {
-            "identifiers": {(DOMAIN, config_entry.entry_id)},
-            "name": "Proteus Inverter",
-            "manufacturer": "Delta Green",
+            "identifiers": {(DOMAIN, inverter_id)},
+            "name": f"Proteus Inverter {inverter_id[:8]}",
+            "manufacturer": inverter.get("vendor", "Delta Green"),
             "model": "Proteus",
         }
 
     def _get_unique_id(self, base_id: str) -> str:
-        """Get unique ID with optional inverter_id suffix for new installations."""
-        if self._config_entry.data.get("use_unique_id_suffix", False):
-            return f"{base_id}_{self._inverter_id}"
-        return base_id
+        """Get unique ID with inverter_id suffix."""
+        return f"{base_id}_{self._inverter_id}"
 
 
 class ProteusFlexibilityStatusSensor(ProteusBaseSensor):
@@ -79,9 +83,9 @@ class ProteusFlexibilityStatusSensor(ProteusBaseSensor):
     _attr_name = "Proteus flexibilita dostupná"
     _attr_icon = "mdi:lightning-bolt"
 
-    def __init__(self, coordinator, config_entry):
+    def __init__(self, coordinator, config_entry, inverter_id, inverter):
         """Initialize the sensor."""
-        super().__init__(coordinator, config_entry)
+        super().__init__(coordinator, config_entry, inverter_id, inverter)
         self._attr_unique_id = self._get_unique_id("proteus_flex_status")
 
     @property
@@ -98,9 +102,9 @@ class ProteusModeSensor(ProteusBaseSensor):
     _attr_name = "Proteus režim"
     _attr_icon = "mdi:cog"
 
-    def __init__(self, coordinator, config_entry):
+    def __init__(self, coordinator, config_entry, inverter_id, inverter):
         """Initialize the sensor."""
-        super().__init__(coordinator, config_entry)
+        super().__init__(coordinator, config_entry, inverter_id, inverter)
         self._attr_unique_id = self._get_unique_id("proteus_mode")
 
     @property
@@ -117,9 +121,9 @@ class ProteusFlexibilityModeSensor(ProteusBaseSensor):
     _attr_name = "Proteus režim flexibility"
     _attr_icon = "mdi:cog"
 
-    def __init__(self, coordinator, config_entry):
+    def __init__(self, coordinator, config_entry, inverter_id, inverter):
         """Initialize the sensor."""
-        super().__init__(coordinator, config_entry)
+        super().__init__(coordinator, config_entry, inverter_id, inverter)
         self._attr_unique_id = self._get_unique_id("proteus_flexibility_mode")
 
     @property
@@ -138,9 +142,9 @@ class ProteusFlexibilityTodaySensor(ProteusBaseSensor):
     _attr_device_class = SensorDeviceClass.MONETARY
     _attr_icon = "mdi:currency-czk"
 
-    def __init__(self, coordinator, config_entry):
+    def __init__(self, coordinator, config_entry, inverter_id, inverter):
         """Initialize the sensor."""
-        super().__init__(coordinator, config_entry)
+        super().__init__(coordinator, config_entry, inverter_id, inverter)
         self._attr_unique_id = self._get_unique_id("proteus_flexibility_today")
 
     @property
@@ -159,9 +163,9 @@ class ProteusFlexibilityMonthSensor(ProteusBaseSensor):
     _attr_device_class = SensorDeviceClass.MONETARY
     _attr_icon = "mdi:currency-czk"
 
-    def __init__(self, coordinator, config_entry):
+    def __init__(self, coordinator, config_entry, inverter_id, inverter):
         """Initialize the sensor."""
-        super().__init__(coordinator, config_entry)
+        super().__init__(coordinator, config_entry, inverter_id, inverter)
         self._attr_unique_id = self._get_unique_id("proteus_flexibility_month")
 
     @property
@@ -180,9 +184,9 @@ class ProteusFlexibilityTotalSensor(ProteusBaseSensor):
     _attr_device_class = SensorDeviceClass.MONETARY
     _attr_icon = "mdi:currency-czk"
 
-    def __init__(self, coordinator, config_entry):
+    def __init__(self, coordinator, config_entry, inverter_id, inverter):
         """Initialize the sensor."""
-        super().__init__(coordinator, config_entry)
+        super().__init__(coordinator, config_entry, inverter_id, inverter)
         self._attr_unique_id = self._get_unique_id("proteus_flexibility_total")
 
     @property
@@ -199,9 +203,9 @@ class ProteusCommandSensor(ProteusBaseSensor):
     _attr_name = "Proteus příkaz flexibility"
     _attr_icon = "mdi:flash"
 
-    def __init__(self, coordinator, config_entry):
+    def __init__(self, coordinator, config_entry, inverter_id, inverter):
         """Initialize the sensor."""
-        super().__init__(coordinator, config_entry)
+        super().__init__(coordinator, config_entry, inverter_id, inverter)
         self._attr_unique_id = self._get_unique_id("proteus_command")
         self._cancel_time_tracker = None
         self._local_end_time = None
@@ -331,9 +335,9 @@ class ProteusCommandEndSensor(ProteusBaseSensor):
     _attr_device_class = SensorDeviceClass.TIMESTAMP
     _attr_icon = "mdi:clock-end"
 
-    def __init__(self, coordinator, config_entry):
+    def __init__(self, coordinator, config_entry, inverter_id, inverter):
         """Initialize the sensor."""
-        super().__init__(coordinator, config_entry)
+        super().__init__(coordinator, config_entry, inverter_id, inverter)
         self._attr_unique_id = self._get_unique_id("proteus_command_end")
 
     @property
@@ -350,9 +354,9 @@ class ProteusBatteryModeSensor(ProteusBaseSensor):
     _attr_name = "Proteus režim baterie"
     _attr_icon = "mdi:battery"
 
-    def __init__(self, coordinator, config_entry):
+    def __init__(self, coordinator, config_entry, inverter_id, inverter):
         """Initialize the sensor."""
-        super().__init__(coordinator, config_entry)
+        super().__init__(coordinator, config_entry, inverter_id, inverter)
         self._attr_unique_id = self._get_unique_id("proteus_flexalgo_battery")
 
     @property
@@ -369,9 +373,9 @@ class ProteusBatteryFallbackSensor(ProteusBaseSensor):
     _attr_name = "Proteus záložní režim baterie"
     _attr_icon = "mdi:battery-outline"
 
-    def __init__(self, coordinator, config_entry):
+    def __init__(self, coordinator, config_entry, inverter_id, inverter):
         """Initialize the sensor."""
-        super().__init__(coordinator, config_entry)
+        super().__init__(coordinator, config_entry, inverter_id, inverter)
         self._attr_unique_id = self._get_unique_id("proteus_flexalgo_battery_fallback")
 
     @property
@@ -388,9 +392,9 @@ class ProteusPvModeSensor(ProteusBaseSensor):
     _attr_name = "Proteus režim výroby"
     _attr_icon = "mdi:solar-panel"
 
-    def __init__(self, coordinator, config_entry):
+    def __init__(self, coordinator, config_entry, inverter_id, inverter):
         """Initialize the sensor."""
-        super().__init__(coordinator, config_entry)
+        super().__init__(coordinator, config_entry, inverter_id, inverter)
         self._attr_unique_id = self._get_unique_id("proteus_flexalgo_pv")
 
     @property
@@ -408,9 +412,9 @@ class ProteusTargetSocSensor(ProteusBaseSensor):
     _attr_native_unit_of_measurement = "%"
     _attr_icon = "mdi:battery-charging"
 
-    def __init__(self, coordinator, config_entry):
+    def __init__(self, coordinator, config_entry, inverter_id, inverter):
         """Initialize the sensor."""
-        super().__init__(coordinator, config_entry)
+        super().__init__(coordinator, config_entry, inverter_id, inverter)
         self._attr_unique_id = self._get_unique_id("proteus_target_soc")
 
     @property
@@ -430,9 +434,9 @@ class ProteusPredictedProductionSensor(ProteusBaseSensor):
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = "mdi:solar-power"
 
-    def __init__(self, coordinator, config_entry):
+    def __init__(self, coordinator, config_entry, inverter_id, inverter):
         """Initialize the sensor."""
-        super().__init__(coordinator, config_entry)
+        super().__init__(coordinator, config_entry, inverter_id, inverter)
         self._attr_unique_id = self._get_unique_id("proteus_predicted_production")
 
     @property
@@ -452,9 +456,9 @@ class ProteusPredictedConsumptionSensor(ProteusBaseSensor):
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_icon = "mdi:home-lightning-bolt"
 
-    def __init__(self, coordinator, config_entry):
+    def __init__(self, coordinator, config_entry, inverter_id, inverter):
         """Initialize the sensor."""
-        super().__init__(coordinator, config_entry)
+        super().__init__(coordinator, config_entry, inverter_id, inverter)
         self._attr_unique_id = self._get_unique_id("proteus_predicted_consumption")
 
     @property
