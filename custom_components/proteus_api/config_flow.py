@@ -33,6 +33,10 @@ class InvalidAuth(HomeAssistantError):
     """Error to indicate there is invalid auth."""
 
 
+class NoInverters(HomeAssistantError):
+    """Error to indicate no inverters found."""
+
+
 async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
     """Validate the user input allows us to connect."""
     # Create API instance without inverter_id to test credentials
@@ -53,7 +57,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
         await api.close()
 
     if not inverters:
-        raise InvalidAuth
+        raise NoInverters
 
     # Store the email as the title
     return {"title": f"Proteus API ({data['email']})"}
@@ -130,6 +134,11 @@ class OptionsFlow(config_entries.OptionsFlow):
             errors = {}
             try:
                 info = await validate_input(self.hass, user_input)
+            except AuthenticationError as ex:
+                _LOGGER.error("Authentication failed: %s", ex)
+                errors["base"] = "invalid_auth"
+            except NoInverters:
+                errors["base"] = "no_inverters"
             except CannotConnect:
                 errors["base"] = "cannot_connect"
             except InvalidAuth:
@@ -139,12 +148,14 @@ class OptionsFlow(config_entries.OptionsFlow):
                 errors["base"] = "unknown"
             else:
                 # Update the config entry with new credentials
+                # Preserve existing data and only update email/password
+                updated_data = dict(self.config_entry.data)
+                updated_data["email"] = user_input["email"]
+                updated_data["password"] = user_input["password"]
+
                 self.hass.config_entries.async_update_entry(
                     self.config_entry,
-                    data={
-                        "email": user_input["email"],
-                        "password": user_input["password"],
-                    },
+                    data=updated_data,
                     title=info["title"],
                 )
                 # Reload the config entry to apply new credentials

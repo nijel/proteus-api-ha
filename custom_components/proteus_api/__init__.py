@@ -8,6 +8,7 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import DOMAIN, UPDATE_INTERVAL
@@ -84,12 +85,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         temp_api = ProteusAPI("", email, password)
         try:
             inverters = await temp_api.fetch_inverters()
+        except Exception as ex:
+            _LOGGER.error("Failed to fetch inverters: %s", ex)
+            raise ConfigEntryNotReady(f"Failed to fetch inverters: {ex}") from ex
         finally:
             await temp_api.close()
 
         if not inverters:
-            _LOGGER.error("No inverters found for account %s", email)
-            return False
+            _LOGGER.warning("No inverters found for account %s", email)
+            raise ConfigEntryNotReady(
+                "No inverters found for this account. Please check your account status."
+            )
 
         # Create coordinators for all discovered inverters
         inverter_data = {}

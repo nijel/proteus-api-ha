@@ -103,9 +103,15 @@ class ProteusAPI:
             ) as response:
                 if response.status == 401:
                     await self._log_error(response)
+                    # Close session on auth failure to prevent resource leak
+                    await self._session.close()
+                    self._session = None
                     raise AuthenticationError("Invalid email or password")
                 if response.status != 200:
                     await self._log_error(response)
+                    # Close session on connection failure to prevent resource leak
+                    await self._session.close()
+                    self._session = None
                     raise ConnectionError(
                         f"Failed to connect to Proteus API (HTTP {response.status})"
                     )

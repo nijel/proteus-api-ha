@@ -16,6 +16,7 @@
     "error": {
       "cannot_connect": "Nelze se připojit k Proteus API",
       "invalid_auth": "Neplatné přihlašovací údaje",
+      "no_inverters": "Pro tento účet nebyly nalezeny žádné invertory",
       "unknown": "Neočekávaná chyba"
     },
     "abort": {
@@ -36,6 +37,7 @@
     "error": {
       "cannot_connect": "Nelze se připojit k Proteus API",
       "invalid_auth": "Neplatné přihlašovací údaje",
+      "no_inverters": "Pro tento účet nebyly nalezeny žádné invertory",
       "unknown": "Neočekávaná chyba"
     }
   },
