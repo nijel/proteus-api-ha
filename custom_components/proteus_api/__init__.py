@@ -24,6 +24,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     password = entry.data["password"]
 
     # Create a temporary API instance to fetch available inverters
+    # Empty string for inverter_id is acceptable as we only need to authenticate
     temp_api = ProteusAPI("", email, password)
     inverters = await temp_api.fetch_inverters()
 

@@ -216,7 +216,7 @@ class ProteusAutomaticModeSwitch(ProteusBaseSwitch):
 
 
 class ProteusFlexibilityModeSwitch(ProteusBaseSwitch):
-    """Switch for flexibilith mode."""
+    """Switch for flexibility mode."""
 
     def __init__(self, coordinator, config_entry, api, inverter_id, inverter):
         """Initialize the switch."""

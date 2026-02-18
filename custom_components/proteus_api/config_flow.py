@@ -36,6 +36,7 @@ class InvalidAuth(HomeAssistantError):
 async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
     """Validate the user input allows us to connect."""
     # Create API instance without inverter_id to test credentials
+    # Empty string is acceptable here as we only need to authenticate and fetch inverters list
     api = ProteusAPI("", data["email"], data["password"])
 
     try:
