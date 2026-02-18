@@ -26,7 +26,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Create a temporary API instance to fetch available inverters
     temp_api = ProteusAPI("", email, password)
     inverters = await temp_api.fetch_inverters()
-    
+
     if not inverters:
         _LOGGER.error("No inverters found for account %s", email)
         return False
@@ -40,10 +40,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             inverter_id,
             inverter.get("vendor", "Unknown"),
         )
-        
+
         # Create API instance for this inverter
         api = ProteusAPI(inverter_id, email, password)
-        
+
         # Create coordinator for this inverter
         coordinator = ProteusDataUpdateCoordinator(
             hass,
@@ -52,9 +52,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             update_method=api.get_data,
             update_interval=timedelta(seconds=UPDATE_INTERVAL),
         )
-        
+
         await coordinator.async_config_entry_first_refresh()
-        
+
         inverter_data[inverter_id] = {
             "coordinator": coordinator,
             "api": api,

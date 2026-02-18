@@ -35,7 +35,7 @@ async def async_setup_entry(
     for inverter_id, inverter_info in inverters_data.items():
         coordinator = inverter_info["coordinator"]
         inverter = inverter_info["inverter"]
-        
+
         sensors.extend([
             ProteusFlexibilityStatusSensor(coordinator, config_entry, inverter_id, inverter),
             ProteusModeSensor(coordinator, config_entry, inverter_id, inverter),

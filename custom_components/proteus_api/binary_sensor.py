@@ -27,7 +27,7 @@ async def async_setup_entry(
     for inverter_id, inverter_info in inverters_data.items():
         coordinator = inverter_info["coordinator"]
         inverter = inverter_info["inverter"]
-        
+
         for control_type, friendly_name in CONTROL_TYPES.items():
             binary_sensors.append(
                 ProteusManualControlBinarySensor(

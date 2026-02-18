@@ -44,10 +44,10 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     except Exception as ex:
         _LOGGER.error("Connection failed: %s", ex)
         raise CannotConnect from ex
-    
+
     if not inverters:
         raise InvalidAuth
-    
+
     # Store the count of inverters found
     return {"title": f"Proteus API ({len(inverters)} inverter(s))"}
 
@@ -82,7 +82,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # Use email as unique identifier since we're discovering all inverters
             await self.async_set_unique_id(user_input["email"])
             self._abort_if_unique_id_configured()
-            
+
             return self.async_create_entry(title=info["title"], data=user_input)
 
         return self.async_show_form(
