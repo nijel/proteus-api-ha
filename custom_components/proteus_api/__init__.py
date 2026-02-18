@@ -26,6 +26,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     api = ProteusAPI(inverter_id, email, password)
 
+    await api.fetch_inverters()
+
     coordinator = ProteusDataUpdateCoordinator(
         hass,
         _LOGGER,
