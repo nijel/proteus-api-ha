@@ -13,7 +13,7 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 
 from .const import DOMAIN
-from .proteus_api import ProteusAPI
+from .proteus_api import AuthenticationError, ProteusAPI
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -42,9 +42,15 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     try:
         # Test the connection by fetching inverters list
         inverters = await api.fetch_inverters()
+    except AuthenticationError as ex:
+        _LOGGER.error("Authentication failed: %s", ex)
+        raise InvalidAuth from ex
     except Exception as ex:
         _LOGGER.error("Connection failed: %s", ex)
         raise CannotConnect from ex
+    finally:
+        # Always close the API session
+        await api.close()
 
     if not inverters:
         raise InvalidAuth
