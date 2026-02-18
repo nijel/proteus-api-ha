@@ -6,7 +6,7 @@ from datetime import datetime
 import json
 from json import JSONDecodeError
 import logging
-from typing import Any
+from typing import Any, TypedDict, cast
 
 import aiohttp
 from aiohttp.client_exceptions import ClientConnectionError
@@ -18,6 +18,7 @@ from .const import (
     API_ENABLED_ENDPOINT,
     API_ENDPOINT,
     API_FLEXIBILITY_ENDPOINT,
+    API_LIST_ENDPOINT,
     API_LOGIN_ENDPOINT,
     API_MODE_ENDPOINT,
     COMMAND_NONE,
@@ -26,6 +27,16 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+class InverterDict(TypedDict):
+    """Inverter definition as retrieved from the API."""
+
+    id: str
+    featureFlags: list[str]
+    controlMode: str
+    controlEnabled: bool
+    vendor: str
 
 
 class ProteusAPI:
@@ -120,8 +131,36 @@ class ProteusAPI:
                 data,
             )
 
+    async def fetch_inverters(self) -> list[InverterDict]:
+        """Fetch list of inverters available in the API."""
+        client = await self._get_client()
+        params = {
+            "batch": "1",
+            "input": json.dumps(
+                {"0": {"json": None, "meta": {"values": ["undefined"]}}}
+            ),
+        }
+        async with client.get(
+            f"{API_BASE_URL}{API_LIST_ENDPOINT}",
+            params=params,
+            headers=self.get_headers(),
+        ) as response:
+            if response.status == 200:
+                data = await response.json()
+                inverters = cast(list[InverterDict], data[0]["result"]["data"]["json"])
+                for inverter in inverters:
+                    _LOGGER.info(
+                        "Discovered inverter %s (%s)",
+                        inverter["id"],
+                        inverter["vendor"],
+                    )
+                return inverters
+            await self._log_error(response)
+            return []
+
     async def get_data(self) -> dict[str, Any] | None:
         """Fetch data from Proteus API."""
+
         try:
             client = await self._get_client()
 

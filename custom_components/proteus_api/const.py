@@ -5,6 +5,7 @@ DOMAIN = "proteus_api"
 # API endpoints
 API_BASE_URL = "https://proteus.deltagreen.cz/api/trpc/"
 API_ENDPOINT = "inverters.detail,inverters.flexibilityRewardsSummary,inverters.controls.state,commands.current,inverters.currentStep"
+API_LIST_ENDPOINT = "inverters.list"
 API_CONTROL_ENDPOINT = "inverters.controls.updateManualControl"
 API_ENABLED_ENDPOINT = "inverters.controls.updateControlEnabled"
 API_MODE_ENDPOINT = "inverters.controls.updateControlMode"
