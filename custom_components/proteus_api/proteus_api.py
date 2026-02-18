@@ -137,6 +137,7 @@ class ProteusAPI:
                     }
                 ),
             }
+            _LOGGER.debug("Fetching data for %s", self.inverter_id)
 
             async with client.get(
                 f"{API_BASE_URL}{API_ENDPOINT}",
@@ -230,6 +231,9 @@ class ProteusAPI:
                     }
                 }
             }
+            _LOGGER.debug(
+                "Toggling manual control for %s to %s", self.inverter_id, state
+            )
 
             async with client.post(
                 f"{API_BASE_URL}{API_CONTROL_ENDPOINT}?batch=1",
@@ -255,6 +259,7 @@ class ProteusAPI:
                     }
                 }
             }
+            _LOGGER.debug("Toggling control for %s to %s", self.inverter_id, enabled)
 
             async with client.post(
                 f"{API_BASE_URL}{API_ENABLED_ENDPOINT}?batch=1",
@@ -280,6 +285,7 @@ class ProteusAPI:
                     }
                 }
             }
+            _LOGGER.debug("Toggling control mode for %s to %s", self.inverter_id, mode)
 
             async with client.post(
                 f"{API_BASE_URL}{API_MODE_ENDPOINT}?batch=1",
@@ -305,6 +311,9 @@ class ProteusAPI:
                     }
                 }
             }
+            _LOGGER.debug(
+                "Toggling flexibility mode for %s to %s", self.inverter_id, mode
+            )
 
             async with client.post(
                 f"{API_BASE_URL}{API_FLEXIBILITY_ENDPOINT}?batch=1",
@@ -320,4 +329,5 @@ class ProteusAPI:
     async def close(self) -> None:
         """Close the session."""
         if self._session and not self._session.closed:
+            _LOGGER.debug("Closing session for %s", self.inverter_id)
             await self._session.close()
