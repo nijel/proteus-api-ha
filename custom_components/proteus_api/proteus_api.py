@@ -63,7 +63,11 @@ class ProteusAPI:
     async def _get_session(self) -> aiohttp.ClientSession:
         """Get or create aiohttp session."""
         if self._session is None or self._session.closed:
-            _LOGGER.debug("Creating new API session for %s", self.tenant)
+            _LOGGER.debug(
+                "Creating new API session for %s / %s",
+                self.tenant,
+                self.inverter_id,
+            )
             self._session = aiohttp.ClientSession(
                 timeout=aiohttp.ClientTimeout(total=25),
                 headers=self.get_headers(),
