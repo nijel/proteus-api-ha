@@ -36,10 +36,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         temp_api = ProteusAPI("", email, password)
         try:
             inverters = await temp_api.fetch_inverters()
-            await temp_api.close()
         except Exception:
             _LOGGER.exception("Failed to fetch inverter info during migration")
             inverters = []
+        finally:
+            await temp_api.close()
 
         # Find matching inverter or use default info
         inverter = None
@@ -81,8 +82,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # Create a temporary API instance to fetch available inverters
         # Empty string for inverter_id is acceptable as we only need to authenticate
         temp_api = ProteusAPI("", email, password)
-        inverters = await temp_api.fetch_inverters()
-        await temp_api.close()
+        try:
+            inverters = await temp_api.fetch_inverters()
+        finally:
+            await temp_api.close()
 
         if not inverters:
             _LOGGER.error("No inverters found for account %s", email)
