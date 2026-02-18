@@ -105,6 +105,17 @@ class OptionsFlow(config_entries.OptionsFlow):
         """Initialize options flow."""
         self.config_entry = config_entry
 
+    def _get_options_schema(self) -> vol.Schema:
+        """Get the options schema with current values."""
+        return vol.Schema(
+            {
+                vol.Required(
+                    "email", default=self.config_entry.data.get("email")
+                ): str,
+                vol.Required("password"): str,
+            }
+        )
+
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
@@ -138,26 +149,12 @@ class OptionsFlow(config_entries.OptionsFlow):
             # Show form with errors
             return self.async_show_form(
                 step_id="init",
-                data_schema=vol.Schema(
-                    {
-                        vol.Required(
-                            "email", default=self.config_entry.data.get("email")
-                        ): str,
-                        vol.Required("password"): str,
-                    }
-                ),
+                data_schema=self._get_options_schema(),
                 errors=errors,
             )
 
         # Show form with current email
         return self.async_show_form(
             step_id="init",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(
-                        "email", default=self.config_entry.data.get("email")
-                    ): str,
-                    vol.Required("password"): str,
-                }
-            ),
+            data_schema=self._get_options_schema(),
         )
