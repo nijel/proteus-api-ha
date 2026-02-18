@@ -107,7 +107,7 @@ class ProteusAPI:
                 if response.status != 200:
                     await self._log_error(response)
                     raise ConnectionError(
-                        f"Authentication failed with status {response.status}"
+                        f"Failed to connect to Proteus API (HTTP {response.status})"
                     )
 
         return self._session
