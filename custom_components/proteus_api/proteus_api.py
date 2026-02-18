@@ -29,6 +29,10 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
+class AuthenticationError(Exception):
+    """Exception raised for authentication failures."""
+
+
 class InverterDict(TypedDict):
     """Inverter definition as retrieved from the API."""
 
@@ -97,8 +101,20 @@ class ProteusAPI:
                 f"{API_BASE_URL}{API_LOGIN_ENDPOINT}",
                 json=payload,
             ) as response:
+                if response.status == 401:
+                    await self._log_error(response)
+                    # Close session on auth failure to prevent resource leak
+                    await self._session.close()
+                    self._session = None
+                    raise AuthenticationError("Invalid email or password")
                 if response.status != 200:
                     await self._log_error(response)
+                    # Close session on connection failure to prevent resource leak
+                    await self._session.close()
+                    self._session = None
+                    raise ConnectionError(
+                        f"Failed to connect to Proteus API (HTTP {response.status})"
+                    )
 
         return self._session
 

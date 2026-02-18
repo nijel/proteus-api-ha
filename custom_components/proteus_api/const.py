@@ -29,3 +29,14 @@ COMMAND_NONE = "NONE"
 UPDATE_INTERVAL = 10
 
 TID_DELTA_GREEN = "TID_DELTA_GREEN"
+
+
+def format_vendor_name(vendor_name: str) -> str:
+    """Format vendor name from API format to human-friendly format.
+
+    Converts "VICTRON_ENERGY" to "Victron Energy".
+    """
+    if not vendor_name:
+        return "Unknown"
+    # Replace underscores with spaces and convert to title case
+    return vendor_name.replace("_", " ").title()

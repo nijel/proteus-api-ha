@@ -3,14 +3,12 @@
     "step": {
       "user": {
         "title": "Nastavení Proteus API",
-        "description": "Zadejte údaje pro připojení k Proteus API",
+        "description": "Zadejte přihlašovací údaje k Proteus API. Všechny dostupné invertory budou automaticky objeveny.",
         "data": {
-          "inverter_id": "ID invertoru",
           "email": "E-mail",
           "password": "Heslo"
         },
         "data_description": {
-          "inverter_id": "ID invertoru z URL (např. z {example_url})",
           "password": "Přihlašování heslem musí být nastaveno."
         }
       }
@@ -18,11 +16,29 @@
     "error": {
       "cannot_connect": "Nelze se připojit k Proteus API",
       "invalid_auth": "Neplatné přihlašovací údaje",
-      "invalid_inverter_id": "ID invertoru musí obsahovat jen malá písmena a číslice",
+      "no_inverters": "Pro tento účet nebyly nalezeny žádné invertory",
       "unknown": "Neočekávaná chyba"
     },
     "abort": {
-      "already_configured": "Zařízení je již nakonfigurováno"
+      "already_configured": "Tento účet je již nakonfigurován"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Aktualizace přihlašovacích údajů Proteus API",
+        "description": "Aktualizujte svůj e-mail a heslo pro Proteus API.",
+        "data": {
+          "email": "E-mail",
+          "password": "Heslo"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Nelze se připojit k Proteus API",
+      "invalid_auth": "Neplatné přihlašovací údaje",
+      "no_inverters": "Pro tento účet nebyly nalezeny žádné invertory",
+      "unknown": "Neočekávaná chyba"
     }
   },
   "title": "Proteus API"

@@ -40,8 +40,9 @@ Integrace pro Home Assistant umožňující ovládání a monitorování fotovol
 1. Klikněte na **Přidat integraci**
 1. Vyhledejte "Proteus API"
 1. Zadejte požadované údaje:
-   - **ID invertoru**: Najdete v URL na stránce invertoru (https://proteus.deltagreen.cz/cs/device/inverter/XXX)
-   - **Uživatelské jméno a heslo**: V Proteovi musí být nastavené přihlašování heslem (ne proklikem z https://moje.deltagreen.cz/, ale vytvořením přihlašovacích údajů na https://proteus.deltagreen.cz/)
+   - **E-mail a heslo**: V Proteovi musí být nastavené přihlašování heslem (ne proklikem z https://moje.deltagreen.cz/, ale vytvořením přihlašovacích údajů na https://proteus.deltagreen.cz/)
+
+Integrace automaticky objeví všechny invertory dostupné ve vašem účtu a vytvoří entity pro každý z nich.
 
 ## Dostupné entity
 

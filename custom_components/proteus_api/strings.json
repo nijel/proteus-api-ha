@@ -3,14 +3,12 @@
     "step": {
       "user": {
         "title": "Setup Proteus API",
-        "description": "Enter the details to connect to Proteus API",
+        "description": "Enter your Proteus API credentials. All available inverters will be discovered automatically.",
         "data": {
-          "inverter_id": "Inverter ID",
           "email": "E-mail",
           "password": "Password"
         },
         "data_description": {
-          "inverter_id": "Inverter ID from URL (e.g. from {example_url})",
           "password": "Password authentication has to be configured."
         }
       }
@@ -18,11 +16,29 @@
     "error": {
       "cannot_connect": "Cannot connect to Proteus API",
       "invalid_auth": "Invalid authentication credentials",
-      "invalid_inverter_id": "Inverter ID must be lowercase letters and digits",
+      "no_inverters": "No inverters found for this account",
       "unknown": "Unexpected error"
     },
     "abort": {
-      "already_configured": "Device is already configured"
+      "already_configured": "This account is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Update Proteus API credentials",
+        "description": "Update your email and password for Proteus API.",
+        "data": {
+          "email": "E-mail",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to Proteus API",
+      "invalid_auth": "Invalid authentication credentials",
+      "no_inverters": "No inverters found for this account",
+      "unknown": "Unexpected error"
     }
   },
   "title": "Proteus API"

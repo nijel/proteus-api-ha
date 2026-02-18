@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import re
 from typing import Any
 
 import voluptuous as vol
@@ -14,24 +13,16 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 
 from .const import DOMAIN
-from .proteus_api import ProteusAPI
+from .proteus_api import AuthenticationError, ProteusAPI
 
 _LOGGER = logging.getLogger(__name__)
 
-# Inverter ID must be exactly 24-25 lowercase letters and digits
-INVERTER_ID_PATTERN = r"[a-z0-9]{24,25}"
-
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
-        vol.Required("inverter_id"): str,
         vol.Required("email"): str,
         vol.Required("password"): str,
     }
 )
-
-
-class InvalidInverterId(HomeAssistantError):
-    """Error to indicate the inverter ID format is invalid."""
 
 
 class CannotConnect(HomeAssistantError):
@@ -42,34 +33,47 @@ class InvalidAuth(HomeAssistantError):
     """Error to indicate there is invalid auth."""
 
 
+class NoInverters(HomeAssistantError):
+    """Error to indicate no inverters found."""
+
+
 async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
     """Validate the user input allows us to connect."""
-    # Validate inverter ID format
-    inverter_id = data["inverter_id"].strip()
-    if not re.fullmatch(INVERTER_ID_PATTERN, inverter_id):
-        raise InvalidInverterId
-
-    # Update data with stripped inverter ID
-    data["inverter_id"] = inverter_id
-
-    api = ProteusAPI(inverter_id, data["email"], data["password"])
+    # Create API instance without inverter_id to test credentials
+    # Empty string is acceptable here as we only need to authenticate and fetch inverters list
+    api = ProteusAPI("", data["email"], data["password"])
 
     try:
-        # Test the connection using executor job for synchronous API
-        result = await hass.async_add_executor_job(api.get_data)
+        # Test the connection by fetching inverters list
+        inverters = await api.fetch_inverters()
+    except AuthenticationError as ex:
+        _LOGGER.error("Authentication failed: %s", ex)
+        raise InvalidAuth from ex
     except Exception as ex:
         _LOGGER.error("Connection failed: %s", ex)
         raise CannotConnect from ex
-    if not result:
-        raise InvalidAuth
+    finally:
+        # Always close the API session
+        await api.close()
 
-    return {"title": f"Proteus API ({inverter_id[:8]}...)"}
+    if not inverters:
+        raise NoInverters
+
+    # Store the email as the title
+    return {"title": f"Proteus API ({data['email']})"}
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Proteus API."""
 
     VERSION = 1
+
+    @staticmethod
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> OptionsFlow:
+        """Get the options flow for this handler."""
+        return OptionsFlow(config_entry)
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -79,16 +83,16 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_show_form(
                 step_id="user",
                 data_schema=STEP_USER_DATA_SCHEMA,
-                description_placeholders={
-                    "example_url": "https://proteus.deltagreen.cz/cs/device/inverter/XXX",
-                },
             )
 
         errors = {}
         try:
             info = await validate_input(self.hass, user_input)
-        except InvalidInverterId:
-            errors["inverter_id"] = "invalid_inverter_id"
+        except AuthenticationError as ex:
+            _LOGGER.error("Authentication failed: %s", ex)
+            errors["base"] = "invalid_auth"
+        except NoInverters:
+            errors["base"] = "no_inverters"
         except CannotConnect:
             errors["base"] = "cannot_connect"
         except InvalidAuth:
@@ -97,19 +101,81 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             _LOGGER.exception("Unexpected exception")
             errors["base"] = "unknown"
         else:
-            # Check for duplicate inverter_id in existing entries
-            # This handles both old entries (without unique_id) and new entries
-            for entry in self._async_current_entries():
-                if entry.data.get("inverter_id") == user_input["inverter_id"]:
-                    return self.async_abort(reason="already_configured")
-
-            # Set unique ID based on inverter ID to allow multiple instances
-            await self.async_set_unique_id(user_input["inverter_id"])
+            # Check if this account is already configured
+            # Use normalized email as unique identifier since we're discovering all inverters
+            normalized_email = user_input["email"].strip().casefold()
+            await self.async_set_unique_id(normalized_email)
             self._abort_if_unique_id_configured()
-            # Add flag for new installations to use unique ID suffix
-            user_input["use_unique_id_suffix"] = True
+
             return self.async_create_entry(title=info["title"], data=user_input)
 
         return self.async_show_form(
             step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
+        )
+
+
+class OptionsFlow(config_entries.OptionsFlow):
+    """Handle options flow for Proteus API integration."""
+
+    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+        """Initialize options flow."""
+        self.config_entry = config_entry
+
+    def _get_options_schema(self) -> vol.Schema:
+        """Get the options schema with current values."""
+        return vol.Schema(
+            {
+                vol.Required("email", default=self.config_entry.data.get("email")): str,
+                vol.Required("password"): str,
+            }
+        )
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Manage the options."""
+        if user_input is not None:
+            # Validate the new credentials
+            errors = {}
+            try:
+                info = await validate_input(self.hass, user_input)
+            except AuthenticationError as ex:
+                _LOGGER.error("Authentication failed: %s", ex)
+                errors["base"] = "invalid_auth"
+            except NoInverters:
+                errors["base"] = "no_inverters"
+            except CannotConnect:
+                errors["base"] = "cannot_connect"
+            except InvalidAuth:
+                errors["base"] = "invalid_auth"
+            except Exception:  # pylint: disable=broad-except
+                _LOGGER.exception("Unexpected exception")
+                errors["base"] = "unknown"
+            else:
+                # Update the config entry with new credentials
+                # Preserve existing data and only update email/password
+                updated_data = dict(self.config_entry.data)
+                updated_data["email"] = user_input["email"]
+                updated_data["password"] = user_input["password"]
+
+                self.hass.config_entries.async_update_entry(
+                    self.config_entry,
+                    data=updated_data,
+                    title=info["title"],
+                )
+                # Reload the config entry to apply new credentials
+                await self.hass.config_entries.async_reload(self.config_entry.entry_id)
+                return self.async_create_entry(title="", data={})
+
+            # Show form with errors
+            return self.async_show_form(
+                step_id="init",
+                data_schema=self._get_options_schema(),
+                errors=errors,
+            )
+
+        # Show form with current email
+        return self.async_show_form(
+            step_id="init",
+            data_schema=self._get_options_schema(),
         )
