@@ -21,6 +21,7 @@ from .const import (
     API_LOGIN_ENDPOINT,
     API_MODE_ENDPOINT,
     COMMAND_NONE,
+    TID_DELTA_GREEN,
     UPDATE_INTERVAL,
 )
 
@@ -30,11 +31,18 @@ _LOGGER = logging.getLogger(__name__)
 class ProteusAPI:
     """Proteus API client."""
 
-    def __init__(self, inverter_id: str, email: str, password: str) -> None:
+    def __init__(
+        self,
+        inverter_id: str,
+        email: str,
+        password: str,
+        tenant: str = TID_DELTA_GREEN,
+    ) -> None:
         """Initialize the API client."""
         self.inverter_id = inverter_id
         self.email = email
         self.password = password
+        self.tenant = tenant
         self._session = None
 
     def get_headers(self) -> dict[str, str]:
@@ -55,6 +63,7 @@ class ProteusAPI:
     async def _get_session(self) -> aiohttp.ClientSession:
         """Get or create aiohttp session."""
         if self._session is None or self._session.closed:
+            _LOGGER.debug("Creating new API session for %s", self.tenant)
             self._session = aiohttp.ClientSession(
                 timeout=aiohttp.ClientTimeout(total=25),
                 headers=self.get_headers(),
@@ -62,7 +71,7 @@ class ProteusAPI:
 
             payload = {
                 "json": {
-                    "tenantId": "TID_DELTA_GREEN",
+                    "tenantId": self.tenant,
                     "email": self.email,
                     "password": self.password,
                 }
