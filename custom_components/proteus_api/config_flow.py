@@ -88,6 +88,11 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
         try:
             info = await validate_input(self.hass, user_input)
+        except AuthenticationError as ex:
+            _LOGGER.error("Authentication failed: %s", ex)
+            errors["base"] = "invalid_auth"
+        except NoInverters:
+            errors["base"] = "no_inverters"
         except CannotConnect:
             errors["base"] = "cannot_connect"
         except InvalidAuth:

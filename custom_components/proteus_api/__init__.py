@@ -12,7 +12,7 @@ from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import DOMAIN, UPDATE_INTERVAL
-from .proteus_api import ProteusAPI
+from .proteus_api import AuthenticationError, ProteusAPI
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -85,7 +85,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         temp_api = ProteusAPI("", email, password)
         try:
             inverters = await temp_api.fetch_inverters()
-        except Exception as ex:
+        except (AuthenticationError, ConnectionError) as ex:
             _LOGGER.error("Failed to fetch inverters: %s", ex)
             raise ConfigEntryNotReady(f"Failed to fetch inverters: {ex}") from ex
         finally:
