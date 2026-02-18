@@ -18,7 +18,7 @@ from homeassistant.helpers.event import async_track_point_in_time
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
-from .const import COMMAND_NONE, DOMAIN
+from .const import COMMAND_NONE, DOMAIN, format_vendor_name
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -89,7 +89,7 @@ class ProteusBaseSensor(CoordinatorEntity, SensorEntity):
         self._config_entry = config_entry
         self._inverter_id = inverter_id
         self._inverter = inverter
-        vendor_name = inverter.get("vendor", "Unknown")
+        vendor_name = format_vendor_name(inverter.get("vendor", "Unknown"))
         self._attr_device_info = {
             "identifiers": {(DOMAIN, inverter_id)},
             "name": f"{vendor_name} Inverter",
@@ -165,7 +165,7 @@ class ProteusFlexibilityTodaySensor(ProteusBaseSensor):
     _attr_name = "Proteus obchodování flexibility dnes"
     _attr_native_unit_of_measurement = "Kč"
     _attr_device_class = SensorDeviceClass.MONETARY
-    _attr_icon = "mdi:currency-czk"
+    _attr_icon = "mdi:cash-clock"
 
     def __init__(self, coordinator, config_entry, inverter_id, inverter):
         """Initialize the sensor."""
@@ -186,7 +186,7 @@ class ProteusFlexibilityMonthSensor(ProteusBaseSensor):
     _attr_name = "Proteus obchodování flexibility za měsíc"
     _attr_native_unit_of_measurement = "Kč"
     _attr_device_class = SensorDeviceClass.MONETARY
-    _attr_icon = "mdi:currency-czk"
+    _attr_icon = "mdi:cash"
 
     def __init__(self, coordinator, config_entry, inverter_id, inverter):
         """Initialize the sensor."""
@@ -207,7 +207,7 @@ class ProteusFlexibilityTotalSensor(ProteusBaseSensor):
     _attr_name = "Proteus obchodování flexibility celkem"
     _attr_native_unit_of_measurement = "Kč"
     _attr_device_class = SensorDeviceClass.MONETARY
-    _attr_icon = "mdi:currency-czk"
+    _attr_icon = "mdi:cash-multiple"
 
     def __init__(self, coordinator, config_entry, inverter_id, inverter):
         """Initialize the sensor."""

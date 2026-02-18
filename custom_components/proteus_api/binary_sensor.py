@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONTROL_TYPES, DOMAIN
+from .const import CONTROL_TYPES, DOMAIN, format_vendor_name
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ class ProteusBaseBinarySensor(CoordinatorEntity, BinarySensorEntity):
         self._config_entry = config_entry
         self._inverter_id = inverter_id
         self._inverter = inverter
-        vendor_name = inverter.get("vendor", "Unknown")
+        vendor_name = format_vendor_name(inverter.get("vendor", "Unknown"))
         self._attr_device_info = {
             "identifiers": {(DOMAIN, inverter_id)},
             "name": f"{vendor_name} Inverter",
