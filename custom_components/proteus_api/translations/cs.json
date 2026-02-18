@@ -22,5 +22,22 @@
       "already_configured": "Tento účet je již nakonfigurován"
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Aktualizace přihlašovacích údajů Proteus API",
+        "description": "Aktualizujte svůj e-mail a heslo pro Proteus API.",
+        "data": {
+          "email": "E-mail",
+          "password": "Heslo"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Nelze se připojit k Proteus API",
+      "invalid_auth": "Neplatné přihlašovací údaje",
+      "unknown": "Neočekávaná chyba"
+    }
+  },
   "title": "Proteus API"
 }

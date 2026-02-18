@@ -22,5 +22,22 @@
       "already_configured": "This account is already configured"
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Update Proteus API credentials",
+        "description": "Update your email and password for Proteus API.",
+        "data": {
+          "email": "E-mail",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to Proteus API",
+      "invalid_auth": "Invalid authentication credentials",
+      "unknown": "Unexpected error"
+    }
+  },
   "title": "Proteus API"
 }
