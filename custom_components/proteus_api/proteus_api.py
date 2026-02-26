@@ -60,7 +60,7 @@ class ProteusAPI:
         self.tenant = tenant
         self._session = None
 
-    def get_headers(self) -> dict[str, str]:
+    def get_headers(self, *, for_post: bool = False) -> dict[str, str]:
         """Build HTTP headers for the next request.
 
         Includes CSRF header if session is open.
@@ -68,7 +68,10 @@ class ProteusAPI:
         result = {
             "Content-Type": "application/json",
             "Origin": "https://proteus.deltagreen.cz",
+            "Accept": "*/*",
         }
+        if for_post:
+            result["trpc-accept"] = "application/jsonl"
         if self._session is not None:
             result["x-proteus-csrf"] = self._session.cookie_jar.filter_cookies(
                 API_BASE_URL
@@ -215,6 +218,7 @@ class ProteusAPI:
             _LOGGER.error("Missing data: %s", raw_data)
             return {}
         try:
+            # _LOGGER.debug("Parsed data: %s", raw_data)
             parsed = {}
 
             # Basic info
@@ -287,14 +291,21 @@ class ProteusAPI:
                 }
             }
             _LOGGER.debug(
-                "Toggling manual control for %s to %s", self.inverter_id, state
+                "Toggling manual control %s for %s to %s: %s",
+                control_type,
+                self.inverter_id,
+                state,
+                payload,
             )
 
             async with client.post(
                 f"{API_BASE_URL}{API_CONTROL_ENDPOINT}?batch=1",
                 json=payload,
-                headers=self.get_headers(),
+                headers=self.get_headers(for_post=True),
             ) as response:
+                data = await response.text()
+                _LOGGER.debug("Response data: %s", data)
+
                 return response.status == 200
 
         except Exception:
@@ -319,8 +330,10 @@ class ProteusAPI:
             async with client.post(
                 f"{API_BASE_URL}{API_ENABLED_ENDPOINT}?batch=1",
                 json=payload,
-                headers=self.get_headers(),
+                headers=self.get_headers(for_post=True),
             ) as response:
+                data = await response.text()
+                _LOGGER.debug("Response data: %s", data)
                 return response.status == 200
 
         except Exception:
@@ -345,8 +358,10 @@ class ProteusAPI:
             async with client.post(
                 f"{API_BASE_URL}{API_MODE_ENDPOINT}?batch=1",
                 json=payload,
-                headers=self.get_headers(),
+                headers=self.get_headers(for_post=True),
             ) as response:
+                data = await response.text()
+                _LOGGER.debug("Response data: %s", data)
                 return response.status == 200
 
         except Exception:
@@ -373,8 +388,10 @@ class ProteusAPI:
             async with client.post(
                 f"{API_BASE_URL}{API_FLEXIBILITY_ENDPOINT}?batch=1",
                 json=payload,
-                headers=self.get_headers(),
+                headers=self.get_headers(for_post=True),
             ) as response:
+                data = await response.text()
+                _LOGGER.debug("Response data: %s", data)
                 return response.status == 200
 
         except Exception:
