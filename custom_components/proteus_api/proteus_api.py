@@ -69,6 +69,7 @@ class ProteusAPI:
             "Content-Type": "application/json",
             "Origin": "https://proteus.deltagreen.cz",
             "Accept": "*/*",
+            "Referer": "https://proteus.deltagreen.cz",
         }
         if for_post:
             result["trpc-accept"] = "application/jsonl"
@@ -274,6 +275,7 @@ class ProteusAPI:
             _LOGGER.exception("Error parsing data")
             return {}
 
+        _LOGGER.debug("Parsed status %s", parsed)
         return parsed
 
     async def update_manual_control(self, control_type: str, state: str) -> bool:
