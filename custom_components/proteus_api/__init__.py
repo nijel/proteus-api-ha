@@ -39,9 +39,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             inverters = await temp_api.fetch_inverters()
         except AuthenticationError as ex:
             _LOGGER.error("Authentication failed during migration: %s", ex)
-            raise ConfigEntryAuthFailed(
-                f"Authentication failed: {ex}"
-            ) from ex
+            raise ConfigEntryAuthFailed(f"Authentication failed: {ex}") from ex
         except Exception:
             _LOGGER.exception("Failed to fetch inverter info during migration")
             inverters = []
