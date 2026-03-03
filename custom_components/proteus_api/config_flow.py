@@ -75,9 +75,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Get the options flow for this handler."""
         return OptionsFlow()
 
-    async def async_step_reauth(
-        self, entry_data: dict[str, Any]
-    ) -> FlowResult:
+    async def async_step_reauth(self, entry_data: dict[str, Any]) -> FlowResult:
         """Handle reauth upon an authentication error."""
         return await self.async_step_reauth_confirm()
 
