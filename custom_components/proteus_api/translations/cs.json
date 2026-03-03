@@ -11,6 +11,14 @@
         "data_description": {
           "password": "Přihlašování heslem musí být nastaveno."
         }
+      },
+      "reauth_confirm": {
+        "title": "Opětovné ověření Proteus API",
+        "description": "Ověření selhalo. Zadejte prosím znovu své přihlašovací údaje.",
+        "data": {
+          "email": "E-mail",
+          "password": "Heslo"
+        }
       }
     },
     "error": {
@@ -20,7 +28,8 @@
       "unknown": "Neočekávaná chyba"
     },
     "abort": {
-      "already_configured": "Tento účet je již nakonfigurován"
+      "already_configured": "Tento účet je již nakonfigurován",
+      "reauth_successful": "Opětovné ověření bylo úspěšné"
     }
   },
   "options": {

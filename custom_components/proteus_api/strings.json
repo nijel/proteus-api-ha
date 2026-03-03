@@ -11,6 +11,14 @@
         "data_description": {
           "password": "Password authentication has to be configured."
         }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate Proteus API",
+        "description": "Authentication failed. Please re-enter your credentials.",
+        "data": {
+          "email": "E-mail",
+          "password": "Password"
+        }
       }
     },
     "error": {
@@ -20,7 +28,8 @@
       "unknown": "Unexpected error"
     },
     "abort": {
-      "already_configured": "This account is already configured"
+      "already_configured": "This account is already configured",
+      "reauth_successful": "Re-authentication successful"
     }
   },
   "options": {
