@@ -8,7 +8,7 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import DOMAIN, UPDATE_INTERVAL
@@ -37,6 +37,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         temp_api = ProteusAPI("", email, password)
         try:
             inverters = await temp_api.fetch_inverters()
+        except AuthenticationError as ex:
+            _LOGGER.exception("Authentication failed during migration")
+            raise ConfigEntryAuthFailed(
+                f"Authentication failed: {ex}"
+            ) from ex
         except Exception:
             _LOGGER.exception("Failed to fetch inverter info during migration")
             inverters = []
@@ -85,7 +90,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         temp_api = ProteusAPI("", email, password)
         try:
             inverters = await temp_api.fetch_inverters()
-        except (AuthenticationError, ConnectionError) as ex:
+        except AuthenticationError as ex:
+            _LOGGER.error("Authentication failed: %s", ex)
+            raise ConfigEntryAuthFailed(f"Authentication failed: {ex}") from ex
+        except ConnectionError as ex:
             _LOGGER.error("Failed to fetch inverters: %s", ex)
             raise ConfigEntryNotReady(f"Failed to fetch inverters: {ex}") from ex
         finally:
@@ -174,5 +182,9 @@ class ProteusDataUpdateCoordinator(DataUpdateCoordinator):
         """Update data via library."""
         try:
             return await self.update_method()
+        except AuthenticationError as exception:
+            raise ConfigEntryAuthFailed(
+                f"Authentication failed: {exception}"
+            ) from exception
         except Exception as exception:
             raise UpdateFailed(exception) from exception

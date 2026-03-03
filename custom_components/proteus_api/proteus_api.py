@@ -112,12 +112,19 @@ class ProteusAPI:
                     self._session = None
                     raise AuthenticationError("Invalid email or password")
                 if response.status != 200:
+                    error_message = await self._extract_error_message(response)
                     await self._log_error(response)
-                    # Close session on connection failure to prevent resource leak
+                    # Close session on failure to prevent resource leak
                     await self._session.close()
                     self._session = None
+                    if response.status == 400:
+                        raise AuthenticationError(
+                            error_message
+                            or f"Authentication failed (HTTP {response.status})"
+                        )
                     raise ConnectionError(
-                        f"Failed to connect to Proteus API (HTTP {response.status})"
+                        error_message
+                        or f"Failed to connect to Proteus API (HTTP {response.status})"
                     )
 
         return self._session
@@ -131,6 +138,16 @@ class ProteusAPI:
             exceptions={ConnectionError, ClientConnectionError, TimeoutError},
         )
         return RetryClient(client_session=session, retry_options=retry_options)
+
+    async def _extract_error_message(
+        self, response: aiohttp.ClientResponse
+    ) -> str | None:
+        """Extract error message from API response body."""
+        try:
+            data = await response.json()
+            return data["error"]["json"]["message"]
+        except (JSONDecodeError, KeyError, TypeError):
+            return None
 
     async def _log_error(self, response: aiohttp.ClientResponse) -> None:
         try:
