@@ -285,18 +285,40 @@ class ProteusAPI:
             params=params,
             headers=self.get_headers(),
         ) as response:
-            if response.status == 200:
-                data = await response.json()
-                inverters = cast(list[InverterDict], data[0]["result"]["data"]["json"])
-                for inverter in inverters:
-                    _LOGGER.info(
-                        "Discovered inverter %s (%s)",
-                        inverter["id"],
-                        inverter["vendor"],
+            response_text = await response.text()
+            if not self._is_successful_trpc_response(
+                response,
+                response_text,
+                operation="Inverter discovery",
+            ):
+                error_message = await self._extract_error_message(response)
+                if response.status in {400, 401}:
+                    raise AuthenticationError(
+                        error_message
+                        or f"Inverter discovery failed (HTTP {response.status})"
                     )
-                return inverters
-            await self._log_error(response)
-            return []
+                raise ConnectionError(
+                    error_message
+                    or f"Failed to fetch inverters (HTTP {response.status})"
+                )
+
+            payload = self._parse_response_body(response_text)
+            try:
+                inverters = cast(
+                    list[InverterDict], payload[0]["result"]["data"]["json"]
+                )
+            except (KeyError, TypeError, IndexError) as exception:
+                raise ConnectionError(
+                    "Unexpected inverter discovery response"
+                ) from exception
+
+            for inverter in inverters:
+                _LOGGER.info(
+                    "Discovered inverter %s (%s)",
+                    inverter["id"],
+                    inverter["vendor"],
+                )
+            return inverters
 
     async def get_data(self) -> dict[str, Any] | None:
         """Fetch data from Proteus API."""
