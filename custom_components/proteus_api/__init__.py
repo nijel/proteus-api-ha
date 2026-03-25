@@ -24,46 +24,36 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     email = entry.data["email"]
     password = entry.data["password"]
 
-    # Check if this is an old config entry with inverter_id
-    if "inverter_id" in entry.data:
-        # Migration: old single-inverter config
-        inverter_id = entry.data["inverter_id"]
-        _LOGGER.info("Migrating old config entry with inverter_id %s", inverter_id)
+    # Empty string for inverter_id is acceptable here as we only need to
+    # authenticate and fetch the list of available inverters.
+    temp_api = ProteusAPI("", email, password)
+    try:
+        inverters = await temp_api.fetch_inverters()
+    except AuthenticationError as ex:
+        _LOGGER.error("Authentication failed: %s", ex)
+        raise ConfigEntryAuthFailed(f"Authentication failed: {ex}") from ex
+    except ConnectionError as ex:
+        _LOGGER.error("Failed to fetch inverters: %s", ex)
+        raise ConfigEntryNotReady(f"Failed to fetch inverters: {ex}") from ex
+    finally:
+        await temp_api.close()
 
-        # Create API instance for the single inverter
+    if not inverters:
+        _LOGGER.warning("No inverters found for account %s", email)
+        raise ConfigEntryNotReady(
+            "No inverters found for this account. Please check your account status."
+        )
+
+    inverter_data = {}
+    for inverter in inverters:
+        inverter_id = inverter["id"]
+        _LOGGER.info(
+            "Setting up inverter %s (%s)",
+            inverter_id,
+            inverter.get("vendor", "Unknown"),
+        )
+
         api = ProteusAPI(inverter_id, email, password)
-
-        # Fetch inverter info for device metadata
-        temp_api = ProteusAPI("", email, password)
-        try:
-            inverters = await temp_api.fetch_inverters()
-        except AuthenticationError as ex:
-            _LOGGER.error("Authentication failed during migration: %s", ex)
-            raise ConfigEntryAuthFailed(f"Authentication failed: {ex}") from ex
-        except Exception:
-            _LOGGER.exception("Failed to fetch inverter info during migration")
-            inverters = []
-        finally:
-            await temp_api.close()
-
-        # Find matching inverter or use default info
-        inverter = None
-        for inv in inverters:
-            if inv["id"] == inverter_id:
-                inverter = inv
-                break
-
-        if inverter is None:
-            # Fallback if we can't find the inverter in the list
-            inverter = {
-                "id": inverter_id,
-                "vendor": "Delta Green",
-                "featureFlags": [],
-                "controlMode": "UNKNOWN",
-                "controlEnabled": False,
-            }
-
-        # Create coordinator for this inverter
         coordinator = ProteusDataUpdateCoordinator(
             hass,
             _LOGGER,
@@ -74,64 +64,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         await coordinator.async_config_entry_first_refresh()
 
-        inverter_data = {
-            inverter_id: {
-                "coordinator": coordinator,
-                "api": api,
-                "inverter": inverter,
-            }
+        inverter_data[inverter_id] = {
+            "coordinator": coordinator,
+            "api": api,
+            "inverter": inverter,
         }
-    else:
-        # New multi-inverter config
-        # Create a temporary API instance to fetch available inverters
-        # Empty string for inverter_id is acceptable as we only need to authenticate
-        temp_api = ProteusAPI("", email, password)
-        try:
-            inverters = await temp_api.fetch_inverters()
-        except AuthenticationError as ex:
-            _LOGGER.error("Authentication failed: %s", ex)
-            raise ConfigEntryAuthFailed(f"Authentication failed: {ex}") from ex
-        except ConnectionError as ex:
-            _LOGGER.error("Failed to fetch inverters: %s", ex)
-            raise ConfigEntryNotReady(f"Failed to fetch inverters: {ex}") from ex
-        finally:
-            await temp_api.close()
-
-        if not inverters:
-            _LOGGER.warning("No inverters found for account %s", email)
-            raise ConfigEntryNotReady(
-                "No inverters found for this account. Please check your account status."
-            )
-
-        # Create coordinators for all discovered inverters
-        inverter_data = {}
-        for inverter in inverters:
-            inverter_id = inverter["id"]
-            _LOGGER.info(
-                "Setting up inverter %s (%s)",
-                inverter_id,
-                inverter.get("vendor", "Unknown"),
-            )
-
-            # Create API instance for this inverter
-            api = ProteusAPI(inverter_id, email, password)
-
-            # Create coordinator for this inverter
-            coordinator = ProteusDataUpdateCoordinator(
-                hass,
-                _LOGGER,
-                name=f"proteus_api_{inverter_id}",
-                update_method=api.get_data,
-                update_interval=timedelta(seconds=UPDATE_INTERVAL),
-            )
-
-            await coordinator.async_config_entry_first_refresh()
-
-            inverter_data[inverter_id] = {
-                "coordinator": coordinator,
-                "api": api,
-                "inverter": inverter,
-            }
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         "inverters": inverter_data,
