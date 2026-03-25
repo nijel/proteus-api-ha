@@ -175,18 +175,20 @@ class ProteusAPI:
         return parsed_lines
 
     def _iter_trpc_errors(self, payload: Any):
-        """Yield embedded tRPC error objects from a response payload."""
+        """Yield top-level tRPC error objects from a response payload."""
         if isinstance(payload, dict):
-            error = payload.get("error")
-            if isinstance(error, dict):
-                yield error
-            for value in payload.values():
-                yield from self._iter_trpc_errors(value)
+            if "error" in payload and (
+                len(payload) == 1 or "result" in payload or "meta" in payload
+            ):
+                error = payload.get("error")
+                if isinstance(error, dict):
+                    yield error
             return
 
         if isinstance(payload, list):
             for item in payload:
-                yield from self._iter_trpc_errors(item)
+                if isinstance(item, dict):
+                    yield from self._iter_trpc_errors(item)
 
     def _format_trpc_error(self, error: dict[str, Any]) -> str:
         """Format a tRPC error payload for logging."""
