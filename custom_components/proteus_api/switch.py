@@ -141,10 +141,12 @@ class ProteusManualControlSwitch(ProteusBaseSwitch):
             return None
         return self._get_backend_state()
 
-    def _get_backend_state(self) -> bool:
+    def _get_backend_state(self) -> bool | None:
         """Return the latest backend state for this control."""
-        manual_controls = self.coordinator.data.get("manual_controls", {})
-        return manual_controls.get(self._control_type, False)
+        manual_controls = self.coordinator.data.get("manual_controls")
+        if manual_controls is None:
+            return None
+        return manual_controls.get(self._control_type)
 
     def _set_optimistic_state(self, state: bool | None) -> None:
         """Update optimistic state and refresh the entity."""
@@ -280,7 +282,10 @@ class ProteusFlexibilityModeSwitch(ProteusBaseSwitch):
         """Return true if the switch is on (automatic mode)."""
         if self.coordinator.data is None:
             return None
-        return self.coordinator.data.get("flexibility_capabilities") != []
+        capabilities = self.coordinator.data.get("flexibility_capabilities")
+        if capabilities is None:
+            return None
+        return capabilities != []
 
     @property
     def available(self) -> bool:
