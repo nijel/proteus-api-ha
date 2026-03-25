@@ -81,4 +81,4 @@ async def test_price_sensors_are_created_with_expected_values(hass) -> None:
     assert production.native_value == 3.7114
 
     tariff = by_unique_id["proteus_distribution_tariff_type_inv-1"]
-    assert tariff.native_value == "ht"
+    assert tariff.native_value == "HT"

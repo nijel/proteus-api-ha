@@ -32,18 +32,17 @@ async def async_setup_entry(
         inverter = inverter_info["inverter"]
 
         # Add manual control switches
-        for control_type, friendly_name in CONTROL_TYPES.items():
-            switches.append(
-                ProteusManualControlSwitch(
-                    coordinator,
-                    config_entry,
-                    api,
-                    inverter_id,
-                    inverter,
-                    control_type,
-                    friendly_name,
-                )
+        switches.extend(
+            ProteusManualControlSwitch(
+                coordinator,
+                config_entry,
+                api,
+                inverter_id,
+                inverter,
+                control_type,
             )
+            for control_type in CONTROL_TYPES
+        )
 
         # Add automatic mode switch
         switches.append(
@@ -150,7 +149,6 @@ class ProteusManualControlSwitch(ProteusOptimisticSwitch):
         inverter_id,
         inverter,
         control_type,
-        friendly_name,
     ):
         """Initialize the switch."""
         super().__init__(coordinator, config_entry, api, inverter_id, inverter)

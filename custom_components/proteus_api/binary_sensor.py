@@ -29,17 +29,16 @@ async def async_setup_entry(
         coordinator = inverter_info["coordinator"]
         inverter = inverter_info["inverter"]
 
-        for control_type, friendly_name in CONTROL_TYPES.items():
-            binary_sensors.append(
-                ProteusManualControlBinarySensor(
-                    coordinator,
-                    config_entry,
-                    inverter_id,
-                    inverter,
-                    control_type,
-                    friendly_name,
-                )
+        binary_sensors.extend(
+            ProteusManualControlBinarySensor(
+                coordinator,
+                config_entry,
+                inverter_id,
+                inverter,
+                control_type,
             )
+            for control_type in CONTROL_TYPES
+        )
 
     async_add_entities(binary_sensors)
 
@@ -72,7 +71,6 @@ class ProteusManualControlBinarySensor(ProteusBaseBinarySensor):
         inverter_id,
         inverter,
         control_type,
-        friendly_name,
     ):
         """Initialize the binary sensor."""
         super().__init__(coordinator, config_entry, inverter_id, inverter)

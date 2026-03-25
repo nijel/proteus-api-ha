@@ -13,31 +13,18 @@ API_FLEXIBILITY_ENDPOINT = "inverters.controls.updateFlexibilityCapabilities"
 API_LOGIN_ENDPOINT = "users.loginWithEmailAndPassword"
 
 # Control types
-CONTROL_TYPES = {
-    "SELLING_INSTEAD_OF_BATTERY_CHARGE": "Prodej do sítě místo nabíjení",
-    "SELLING_FROM_BATTERY": "Prodej z baterie do sítě",
-    "USING_FROM_GRID_INSTEAD_OF_BATTERY": "Šetření energie v baterii",
-    "SAVING_TO_BATTERY": "Nabíjení baterie ze sítě",
-    "BLOCKING_GRID_OVERFLOW": "Zákaz přetoků",
-}
+CONTROL_TYPES = [
+    "SELLING_INSTEAD_OF_BATTERY_CHARGE",
+    "SELLING_FROM_BATTERY",
+    "USING_FROM_GRID_INSTEAD_OF_BATTERY",
+    "SAVING_TO_BATTERY",
+    "BLOCKING_GRID_OVERFLOW",
+]
 
 FLEXIBILITY_CAPABILITIES = {
     "UP_POWER": "Dodavka do site",
     "DOWN_BATTERY_POWER": "Odber ze site do baterie",
     "DOWN_SOLAR_CURTAILMENT_POWER": "Zakaz pretoku",
-}
-
-FLEXIBILITY_CAPABILITY_LOCALIZED_NAMES = {
-    "en": {
-        "UP_POWER": "Export to grid",
-        "DOWN_BATTERY_POWER": "Charge battery from grid",
-        "DOWN_SOLAR_CURTAILMENT_POWER": "Block grid export",
-    },
-    "cs": {
-        "UP_POWER": "Dodávka do sítě",
-        "DOWN_BATTERY_POWER": "Odběr ze sítě do baterie",
-        "DOWN_SOLAR_CURTAILMENT_POWER": "Zákaz přetoků",
-    },
 }
 
 DISTRIBUTION_TARIFF_TYPES = {

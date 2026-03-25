@@ -19,7 +19,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
 from .const import COMMAND_NONE, DISTRIBUTION_TARIFF_TYPES, DOMAIN
-from .entity import build_device_info, get_flexibility_capability_name
+from .entity import build_device_info
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -113,7 +113,7 @@ class ProteusFlexibilityStatusSensor(ProteusBaseSensor):
 
     _attr_translation_key = "flexibility_status"
     _attr_device_class = SensorDeviceClass.ENUM
-    _attr_options = ["usable", "not_usable"]
+    _attr_options = ["USABLE", "NOT_USABLE"]
     _attr_icon = "mdi:lightning-bolt"
 
     def __init__(self, coordinator, config_entry, inverter_id, inverter):
@@ -129,7 +129,7 @@ class ProteusFlexibilityStatusSensor(ProteusBaseSensor):
         flexibility_state = self.coordinator.data.get("flexibility_state")
         if flexibility_state is None:
             return None
-        return str(flexibility_state).lower()
+        return str(flexibility_state)
 
 
 class ProteusModeSensor(ProteusBaseSensor):
@@ -155,6 +155,8 @@ class ProteusFlexibilityModeSensor(ProteusBaseSensor):
     """Flexibility mode sensor."""
 
     _attr_translation_key = "flexibility_mode"
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = ["NONE", "PARTIAL", "FULL"]
     _attr_icon = "mdi:cog"
 
     def __init__(self, coordinator, config_entry, inverter_id, inverter):
@@ -167,7 +169,10 @@ class ProteusFlexibilityModeSensor(ProteusBaseSensor):
         """Return the state of the sensor."""
         if self.coordinator.data is None:
             return None
-        return self.coordinator.data.get("flexibility_mode")
+        flexibility_mode = self.coordinator.data.get("flexibility_mode")
+        if flexibility_mode is None:
+            return None
+        return str(flexibility_mode)
 
     @property
     def extra_state_attributes(self) -> dict[str, list[str]] | None:
@@ -181,12 +186,6 @@ class ProteusFlexibilityModeSensor(ProteusBaseSensor):
 
         return {
             "enabled_capabilities": capabilities,
-            "enabled_capability_names": [
-                get_flexibility_capability_name(
-                    self.hass.config.language if self.hass else "en", capability
-                )
-                for capability in capabilities
-            ],
         }
 
 
@@ -584,7 +583,7 @@ class ProteusDistributionTariffTypeSensor(ProteusBaseSensor):
 
     _attr_translation_key = "distribution_tariff"
     _attr_device_class = SensorDeviceClass.ENUM
-    _attr_options = [tariff_type.lower() for tariff_type in DISTRIBUTION_TARIFF_TYPES]
+    _attr_options = list(DISTRIBUTION_TARIFF_TYPES)
     _attr_icon = "mdi:transmission-tower"
 
     def __init__(self, coordinator, config_entry, inverter_id, inverter):
@@ -600,4 +599,4 @@ class ProteusDistributionTariffTypeSensor(ProteusBaseSensor):
         tariff_type = self.coordinator.data.get("distribution_tariff_type")
         if tariff_type is None:
             return None
-        return str(tariff_type).lower()
+        return str(tariff_type)
