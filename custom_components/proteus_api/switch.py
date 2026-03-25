@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import Any
 
@@ -87,8 +86,63 @@ class ProteusBaseSwitch(CoordinatorEntity, SwitchEntity):
         """Get unique ID with inverter_id suffix."""
         return f"{base_id}_{self._inverter_id}"
 
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        self._clear_optimistic_state()
+        super()._handle_coordinator_update()
 
-class ProteusManualControlSwitch(ProteusBaseSwitch):
+    def _clear_optimistic_state(self) -> None:
+        """Clear any optimistic state held by the entity."""
+
+
+class ProteusOptimisticSwitch(ProteusBaseSwitch):
+    """Base class for switches using optimistic state updates."""
+
+    def __init__(self, coordinator, config_entry, api, inverter_id, inverter):
+        """Initialize the switch."""
+        super().__init__(coordinator, config_entry, api, inverter_id, inverter)
+        self._optimistic_state: bool | None = None
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return true if the switch is on."""
+        if self._optimistic_state is not None:
+            return self._optimistic_state
+        if self.coordinator.data is None:
+            return None
+        return self._get_backend_state()
+
+    def _get_backend_state(self) -> bool:
+        """Return the latest backend state for the entity."""
+        raise NotImplementedError
+
+    def _set_optimistic_state(self, state: bool | None) -> None:
+        """Update optimistic state and refresh the entity."""
+        self._optimistic_state = state
+        self.async_write_ha_state()
+
+    def _clear_optimistic_state(self) -> None:
+        """Clear optimistic state once coordinator data catches up."""
+        if self._optimistic_state is not None:
+            self._set_optimistic_state(None)
+
+    async def _apply_optimistic_update(
+        self,
+        enabled: bool,
+        update_call,
+        *,
+        failure_message: str,
+    ) -> None:
+        """Apply an optimistic state change and clear it on failure."""
+        self._set_optimistic_state(enabled)
+        success = await update_call()
+        if not success:
+            self._set_optimistic_state(None)
+            _LOGGER.error(failure_message)
+
+
+class ProteusManualControlSwitch(ProteusOptimisticSwitch):
     """Switch for manual control states."""
 
     def __init__(
@@ -109,7 +163,6 @@ class ProteusManualControlSwitch(ProteusBaseSwitch):
             f"proteus_switch_{control_type.lower()}"
         )
         self._attr_icon = self._get_icon_for_control_type(control_type)
-        self._optimistic_state: bool | None = None
 
     def _get_icon_for_control_type(self, control_type: str) -> str:
         """Get icon for control type."""
@@ -132,46 +185,22 @@ class ProteusManualControlSwitch(ProteusBaseSwitch):
             and self.coordinator.data.get("control_mode") == "MANUAL"
         )
 
-    @property
-    def is_on(self) -> bool | None:
-        """Return true if the switch is on."""
-        if self._optimistic_state is not None:
-            return self._optimistic_state
-        if self.coordinator.data is None:
-            return None
-        return self._get_backend_state()
-
     def _get_backend_state(self) -> bool:
         """Return the latest backend state for this control."""
         manual_controls = self.coordinator.data.get("manual_controls", {})
         return manual_controls.get(self._control_type, False)
 
-    def _set_optimistic_state(self, state: bool | None) -> None:
-        """Update optimistic state and refresh the entity."""
-        self._optimistic_state = state
-        self.async_write_ha_state()
-
     async def _set_manual_control(self, enabled: bool) -> None:
         """Apply a manual control change with optimistic UI state."""
-        self._set_optimistic_state(enabled)
-        success = await self._api.update_manual_control(
-            self._control_type, "ENABLED" if enabled else "DISABLED"
+        await self._apply_optimistic_update(
+            enabled,
+            lambda: self._api.update_manual_control(
+                self._control_type, "ENABLED" if enabled else "DISABLED"
+            ),
+            failure_message=(
+                f"Failed to turn {'on' if enabled else 'off'} {self._control_type}"
+            ),
         )
-        if not success:
-            self._set_optimistic_state(None)
-            _LOGGER.error(
-                "Failed to turn %s %s",
-                "on" if enabled else "off",
-                self._control_type,
-            )
-            return
-
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator."""
-        if self._optimistic_state is not None:
-            self._set_optimistic_state(None)
-        super()._handle_coordinator_update()
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the switch on."""
@@ -182,7 +211,7 @@ class ProteusManualControlSwitch(ProteusBaseSwitch):
         await self._set_manual_control(False)
 
 
-class ProteusControlEnabledSwitch(ProteusBaseSwitch):
+class ProteusControlEnabledSwitch(ProteusOptimisticSwitch):
     """Switch for control enabled."""
 
     def __init__(self, coordinator, config_entry, api, inverter_id, inverter):
@@ -192,35 +221,28 @@ class ProteusControlEnabledSwitch(ProteusBaseSwitch):
         self._attr_unique_id = self._get_unique_id("proteus_switch_control_enabled")
         self._attr_icon = "mdi:network"
 
-    @property
-    def is_on(self) -> bool | None:
-        """Return true if the switch is on (automatic enabled)."""
-        if self.coordinator.data is None:
-            return None
+    def _get_backend_state(self) -> bool:
+        """Return the latest backend state for this control."""
         return self.coordinator.data.get("control_enabled")
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the switch on (enable automatic enabled)."""
-        success = await self._api.update_control_enabled(True)
-        if success:
-            # Wait a bit and then refresh data
-            await asyncio.sleep(2)
-            await self.coordinator.async_request_refresh()
-        else:
-            _LOGGER.error("Failed to enable automatic enabled")
+        await self._apply_optimistic_update(
+            True,
+            lambda: self._api.update_control_enabled(True),
+            failure_message="Failed to enable automatic enabled",
+        )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the switch off (enable manual enabled)."""
-        success = await self._api.update_control_enabled(False)
-        if success:
-            # Wait a bit and then refresh data
-            await asyncio.sleep(2)
-            await self.coordinator.async_request_refresh()
-        else:
-            _LOGGER.error("Failed to enable manual enabled")
+        await self._apply_optimistic_update(
+            False,
+            lambda: self._api.update_control_enabled(False),
+            failure_message="Failed to enable manual enabled",
+        )
 
 
-class ProteusAutomaticModeSwitch(ProteusBaseSwitch):
+class ProteusAutomaticModeSwitch(ProteusOptimisticSwitch):
     """Switch for automatic mode."""
 
     def __init__(self, coordinator, config_entry, api, inverter_id, inverter):
@@ -230,11 +252,8 @@ class ProteusAutomaticModeSwitch(ProteusBaseSwitch):
         self._attr_unique_id = self._get_unique_id("proteus_switch_automatic_mode")
         self._attr_icon = "mdi:creation"
 
-    @property
-    def is_on(self) -> bool | None:
-        """Return true if the switch is on (automatic mode)."""
-        if self.coordinator.data is None:
-            return None
+    def _get_backend_state(self) -> bool:
+        """Return the latest backend state for this control."""
         return self.coordinator.data.get("control_mode") == "AUTOMATIC"
 
     @property
@@ -246,26 +265,22 @@ class ProteusAutomaticModeSwitch(ProteusBaseSwitch):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the switch on (enable automatic mode)."""
-        success = await self._api.update_control_mode("AUTOMATIC")
-        if success:
-            # Wait a bit and then refresh data
-            await asyncio.sleep(2)
-            await self.coordinator.async_request_refresh()
-        else:
-            _LOGGER.error("Failed to enable automatic mode")
+        await self._apply_optimistic_update(
+            True,
+            lambda: self._api.update_control_mode("AUTOMATIC"),
+            failure_message="Failed to enable automatic mode",
+        )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the switch off (enable manual mode)."""
-        success = await self._api.update_control_mode("MANUAL")
-        if success:
-            # Wait a bit and then refresh data
-            await asyncio.sleep(2)
-            await self.coordinator.async_request_refresh()
-        else:
-            _LOGGER.error("Failed to disable manual mode")
+        await self._apply_optimistic_update(
+            False,
+            lambda: self._api.update_control_mode("MANUAL"),
+            failure_message="Failed to disable manual mode",
+        )
 
 
-class ProteusFlexibilityModeSwitch(ProteusBaseSwitch):
+class ProteusFlexibilityModeSwitch(ProteusOptimisticSwitch):
     """Switch for flexibility mode."""
 
     def __init__(self, coordinator, config_entry, api, inverter_id, inverter):
@@ -275,11 +290,8 @@ class ProteusFlexibilityModeSwitch(ProteusBaseSwitch):
         self._attr_unique_id = self._get_unique_id("proteus_switch_flexibility_mode")
         self._attr_icon = "mdi:robot"
 
-    @property
-    def is_on(self) -> bool | None:
-        """Return true if the switch is on (automatic mode)."""
-        if self.coordinator.data is None:
-            return None
+    def _get_backend_state(self) -> bool:
+        """Return the latest backend state for this control."""
         return self.coordinator.data.get("flexibility_capabilities") != []
 
     @property
@@ -291,22 +303,16 @@ class ProteusFlexibilityModeSwitch(ProteusBaseSwitch):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the switch on (enable automatic mode)."""
-        success = await self._api.update_flexibility_mode(
-            list(FLEXIBILITY_CAPABILITIES)
+        await self._apply_optimistic_update(
+            True,
+            lambda: self._api.update_flexibility_mode(list(FLEXIBILITY_CAPABILITIES)),
+            failure_message="Failed to enable flexibility",
         )
-        if success:
-            # Wait a bit and then refresh data
-            await asyncio.sleep(2)
-            await self.coordinator.async_request_refresh()
-        else:
-            _LOGGER.error("Failed to enable flexibility")
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the switch off (enable manual mode)."""
-        success = await self._api.update_flexibility_mode([])
-        if success:
-            # Wait a bit and then refresh data
-            await asyncio.sleep(2)
-            await self.coordinator.async_request_refresh()
-        else:
-            _LOGGER.error("Failed to disable flexibility")
+        await self._apply_optimistic_update(
+            False,
+            lambda: self._api.update_flexibility_mode([]),
+            failure_message="Failed to disable flexibility",
+        )
