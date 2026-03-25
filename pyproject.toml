@@ -3,6 +3,7 @@ ignore-words-list = "hass"
 
 [tool.ruff]
 required-version = ">=0.12.1"
+target-version = "py313"
 
 [tool.ruff.lint]
 ignore = [
