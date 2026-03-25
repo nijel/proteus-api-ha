@@ -44,6 +44,7 @@
       }
     },
     "error": {
+      "already_configured": "Tento účet je již nakonfigurován",
       "cannot_connect": "Nelze se připojit k Proteus API",
       "invalid_auth": "Neplatné přihlašovací údaje",
       "no_inverters": "Pro tento účet nebyly nalezeny žádné invertory",

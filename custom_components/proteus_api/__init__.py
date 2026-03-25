@@ -11,17 +11,12 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import DOMAIN, UPDATE_INTERVAL
+from .const import DOMAIN, UPDATE_INTERVAL, normalize_email
 from .proteus_api import AuthenticationError, ProteusAPI
 
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.SWITCH]
-
-
-def _normalize_email(email: str) -> str:
-    """Normalize an email address for use as a config entry unique ID."""
-    return email.strip().casefold()
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -37,13 +32,13 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.config_entries.async_update_entry(entry, version=2)
         return True
 
-    normalized_email = _normalize_email(entry.data["email"])
+    normalized_email = normalize_email(entry.data["email"])
 
     for other_entry in hass.config_entries.async_entries(DOMAIN):
         if other_entry.entry_id == entry.entry_id:
             continue
 
-        if _normalize_email(other_entry.data.get("email", "")) != normalized_email:
+        if normalize_email(other_entry.data.get("email", "")) != normalized_email:
             continue
 
         _LOGGER.info(
