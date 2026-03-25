@@ -47,6 +47,8 @@ async def async_setup_entry(
 class ProteusBaseBinarySensor(CoordinatorEntity, BinarySensorEntity):
     """Base class for Proteus binary sensors."""
 
+    _attr_has_entity_name = True
+
     def __init__(self, coordinator, config_entry, inverter_id, inverter):
         """Initialize the binary sensor."""
         super().__init__(coordinator)
@@ -75,7 +77,7 @@ class ProteusManualControlBinarySensor(ProteusBaseBinarySensor):
         """Initialize the binary sensor."""
         super().__init__(coordinator, config_entry, inverter_id, inverter)
         self._control_type = control_type
-        self._attr_name = f"Proteus {friendly_name}"
+        self._attr_translation_key = control_type.lower()
         self._attr_unique_id = self._get_unique_id(f"proteus_{control_type.lower()}")
         self._attr_icon = get_control_type_icon(control_type)
 

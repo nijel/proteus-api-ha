@@ -18,8 +18,8 @@ from homeassistant.helpers.event import async_track_point_in_time
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
-from .const import COMMAND_NONE, DOMAIN, FLEXIBILITY_CAPABILITIES
-from .entity import build_device_info
+from .const import COMMAND_NONE, DISTRIBUTION_TARIFF_TYPES, DOMAIN
+from .entity import build_device_info, get_flexibility_capability_name
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -75,6 +75,15 @@ async def async_setup_entry(
                 ProteusPredictedConsumptionSensor(
                     coordinator, config_entry, inverter_id, inverter
                 ),
+                ProteusConsumptionPriceSensor(
+                    coordinator, config_entry, inverter_id, inverter
+                ),
+                ProteusProductionPriceSensor(
+                    coordinator, config_entry, inverter_id, inverter
+                ),
+                ProteusDistributionTariffTypeSensor(
+                    coordinator, config_entry, inverter_id, inverter
+                ),
             ]
         )
 
@@ -83,6 +92,8 @@ async def async_setup_entry(
 
 class ProteusBaseSensor(CoordinatorEntity, SensorEntity):
     """Base class for Proteus sensors."""
+
+    _attr_has_entity_name = True
 
     def __init__(self, coordinator, config_entry, inverter_id, inverter):
         """Initialize the sensor."""
@@ -100,7 +111,9 @@ class ProteusBaseSensor(CoordinatorEntity, SensorEntity):
 class ProteusFlexibilityStatusSensor(ProteusBaseSensor):
     """Flexibility status sensor."""
 
-    _attr_name = "Proteus flexibilita dostupná"
+    _attr_translation_key = "flexibility_status"
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = ["usable", "not_usable"]
     _attr_icon = "mdi:lightning-bolt"
 
     def __init__(self, coordinator, config_entry, inverter_id, inverter):
@@ -113,13 +126,16 @@ class ProteusFlexibilityStatusSensor(ProteusBaseSensor):
         """Return the native value of the sensor."""
         if self.coordinator.data is None:
             return None
-        return self.coordinator.data.get("flexibility_state")
+        flexibility_state = self.coordinator.data.get("flexibility_state")
+        if flexibility_state is None:
+            return None
+        return str(flexibility_state).lower()
 
 
 class ProteusModeSensor(ProteusBaseSensor):
     """Mode sensor."""
 
-    _attr_name = "Proteus režim"
+    _attr_translation_key = "mode"
     _attr_icon = "mdi:cog"
 
     def __init__(self, coordinator, config_entry, inverter_id, inverter):
@@ -138,7 +154,7 @@ class ProteusModeSensor(ProteusBaseSensor):
 class ProteusFlexibilityModeSensor(ProteusBaseSensor):
     """Flexibility mode sensor."""
 
-    _attr_name = "Proteus režim flexibility"
+    _attr_translation_key = "flexibility_mode"
     _attr_icon = "mdi:cog"
 
     def __init__(self, coordinator, config_entry, inverter_id, inverter):
@@ -166,7 +182,9 @@ class ProteusFlexibilityModeSensor(ProteusBaseSensor):
         return {
             "enabled_capabilities": capabilities,
             "enabled_capability_names": [
-                FLEXIBILITY_CAPABILITIES.get(capability, capability)
+                get_flexibility_capability_name(
+                    self.hass.config.language if self.hass else "en", capability
+                )
                 for capability in capabilities
             ],
         }
@@ -175,7 +193,7 @@ class ProteusFlexibilityModeSensor(ProteusBaseSensor):
 class ProteusFlexibilityTodaySensor(ProteusBaseSensor):
     """Flexibility today sensor."""
 
-    _attr_name = "Proteus obchodování flexibility dnes"
+    _attr_translation_key = "flexibility_today"
     _attr_native_unit_of_measurement = "Kč"
     _attr_device_class = SensorDeviceClass.MONETARY
     _attr_icon = "mdi:cash-clock"
@@ -196,7 +214,7 @@ class ProteusFlexibilityTodaySensor(ProteusBaseSensor):
 class ProteusFlexibilityMonthSensor(ProteusBaseSensor):
     """Flexibility month sensor."""
 
-    _attr_name = "Proteus obchodování flexibility za měsíc"
+    _attr_translation_key = "flexibility_month"
     _attr_native_unit_of_measurement = "Kč"
     _attr_device_class = SensorDeviceClass.MONETARY
     _attr_icon = "mdi:cash"
@@ -217,7 +235,7 @@ class ProteusFlexibilityMonthSensor(ProteusBaseSensor):
 class ProteusFlexibilityTotalSensor(ProteusBaseSensor):
     """Flexibility total sensor."""
 
-    _attr_name = "Proteus obchodování flexibility celkem"
+    _attr_translation_key = "flexibility_total"
     _attr_native_unit_of_measurement = "Kč"
     _attr_device_class = SensorDeviceClass.MONETARY
     _attr_icon = "mdi:cash-multiple"
@@ -238,7 +256,7 @@ class ProteusFlexibilityTotalSensor(ProteusBaseSensor):
 class ProteusCommandSensor(ProteusBaseSensor):
     """Command sensor."""
 
-    _attr_name = "Proteus příkaz flexibility"
+    _attr_translation_key = "command"
     _attr_icon = "mdi:flash"
 
     def __init__(self, coordinator, config_entry, inverter_id, inverter):
@@ -369,7 +387,7 @@ class ProteusCommandSensor(ProteusBaseSensor):
 class ProteusCommandEndSensor(ProteusBaseSensor):
     """Command end sensor."""
 
-    _attr_name = "Proteus konec flexibility"
+    _attr_translation_key = "command_end"
     _attr_device_class = SensorDeviceClass.TIMESTAMP
     _attr_icon = "mdi:clock-end"
 
@@ -389,7 +407,7 @@ class ProteusCommandEndSensor(ProteusBaseSensor):
 class ProteusBatteryModeSensor(ProteusBaseSensor):
     """Battery mode sensor."""
 
-    _attr_name = "Proteus režim baterie"
+    _attr_translation_key = "battery_mode"
     _attr_icon = "mdi:battery"
 
     def __init__(self, coordinator, config_entry, inverter_id, inverter):
@@ -408,7 +426,7 @@ class ProteusBatteryModeSensor(ProteusBaseSensor):
 class ProteusBatteryFallbackSensor(ProteusBaseSensor):
     """Battery fallback sensor."""
 
-    _attr_name = "Proteus záložní režim baterie"
+    _attr_translation_key = "battery_fallback_mode"
     _attr_icon = "mdi:battery-outline"
 
     def __init__(self, coordinator, config_entry, inverter_id, inverter):
@@ -427,7 +445,7 @@ class ProteusBatteryFallbackSensor(ProteusBaseSensor):
 class ProteusPvModeSensor(ProteusBaseSensor):
     """PV mode sensor."""
 
-    _attr_name = "Proteus režim výroby"
+    _attr_translation_key = "pv_mode"
     _attr_icon = "mdi:solar-panel"
 
     def __init__(self, coordinator, config_entry, inverter_id, inverter):
@@ -446,7 +464,7 @@ class ProteusPvModeSensor(ProteusBaseSensor):
 class ProteusTargetSocSensor(ProteusBaseSensor):
     """Target SoC sensor."""
 
-    _attr_name = "Proteus cílový SOC"
+    _attr_translation_key = "target_soc"
     _attr_native_unit_of_measurement = "%"
     _attr_icon = "mdi:battery-charging"
 
@@ -466,7 +484,7 @@ class ProteusTargetSocSensor(ProteusBaseSensor):
 class ProteusPredictedProductionSensor(ProteusBaseSensor):
     """Predicted production sensor."""
 
-    _attr_name = "Proteus odhad výroby"
+    _attr_translation_key = "predicted_production"
     _attr_native_unit_of_measurement = UnitOfEnergy.WATT_HOUR
     _attr_device_class = SensorDeviceClass.ENERGY_STORAGE
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -488,7 +506,7 @@ class ProteusPredictedProductionSensor(ProteusBaseSensor):
 class ProteusPredictedConsumptionSensor(ProteusBaseSensor):
     """Predicted consumption sensor."""
 
-    _attr_name = "Proteus odhad spotřeby"
+    _attr_translation_key = "predicted_consumption"
     _attr_native_unit_of_measurement = UnitOfEnergy.WATT_HOUR
     _attr_device_class = SensorDeviceClass.ENERGY_STORAGE
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -505,3 +523,81 @@ class ProteusPredictedConsumptionSensor(ProteusBaseSensor):
         if self.coordinator.data is None:
             return None
         return self.coordinator.data.get("predicted_consumption")
+
+
+class ProteusConsumptionPriceSensor(ProteusBaseSensor):
+    """Current distribution consumption price sensor."""
+
+    _attr_translation_key = "consumption_price"
+    _attr_native_unit_of_measurement = "CZK/kWh"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = "mdi:cash-plus"
+
+    def __init__(self, coordinator, config_entry, inverter_id, inverter):
+        """Initialize the sensor."""
+        super().__init__(coordinator, config_entry, inverter_id, inverter)
+        self._attr_unique_id = self._get_unique_id("proteus_price_consumption")
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the state of the sensor."""
+        if self.coordinator.data is None:
+            return None
+        return self.coordinator.data.get("price_consumption_kwh")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, float | str] | None:
+        """Return the current distribution price breakdown."""
+        if self.coordinator.data is None:
+            return None
+
+        attributes = self.coordinator.data.get("price_components")
+        if not attributes:
+            return None
+
+        return attributes
+
+
+class ProteusProductionPriceSensor(ProteusBaseSensor):
+    """Current distribution production price sensor."""
+
+    _attr_translation_key = "production_price"
+    _attr_native_unit_of_measurement = "CZK/kWh"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = "mdi:cash-minus"
+
+    def __init__(self, coordinator, config_entry, inverter_id, inverter):
+        """Initialize the sensor."""
+        super().__init__(coordinator, config_entry, inverter_id, inverter)
+        self._attr_unique_id = self._get_unique_id("proteus_price_production")
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the state of the sensor."""
+        if self.coordinator.data is None:
+            return None
+        return self.coordinator.data.get("price_production_kwh")
+
+
+class ProteusDistributionTariffTypeSensor(ProteusBaseSensor):
+    """Current distribution tariff type sensor."""
+
+    _attr_translation_key = "distribution_tariff"
+    _attr_device_class = SensorDeviceClass.ENUM
+    _attr_options = [tariff_type.lower() for tariff_type in DISTRIBUTION_TARIFF_TYPES]
+    _attr_icon = "mdi:transmission-tower"
+
+    def __init__(self, coordinator, config_entry, inverter_id, inverter):
+        """Initialize the sensor."""
+        super().__init__(coordinator, config_entry, inverter_id, inverter)
+        self._attr_unique_id = self._get_unique_id("proteus_distribution_tariff_type")
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the tariff type."""
+        if self.coordinator.data is None:
+            return None
+        tariff_type = self.coordinator.data.get("distribution_tariff_type")
+        if tariff_type is None:
+            return None
+        return str(tariff_type).lower()

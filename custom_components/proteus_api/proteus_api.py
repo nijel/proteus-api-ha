@@ -229,6 +229,27 @@ class ProteusAPI:
         except (KeyError, TypeError):
             return None
 
+    def _normalize_price_components(
+        self, price_components: Any, *, price_mwh: Any
+    ) -> dict[str, Any]:
+        """Convert raw price components into Home Assistant-friendly attributes."""
+        if not isinstance(price_components, dict):
+            return {}
+
+        normalized = {
+            "price_mwh": price_mwh,
+            "distribution_price": price_components.get("distributionPrice"),
+            "distribution_tariff_type": price_components.get("distributionTariffType"),
+            "fee_electricity_buy": price_components.get("feeElectricityBuy"),
+            "fee_electricity_sell": price_components.get("feeElectricitySell"),
+            "tax_electricity": price_components.get("taxElectricity"),
+            "system_services": price_components.get("systemServices"),
+            "poze": price_components.get("poze"),
+            "vat_rate": price_components.get("vatRate"),
+        }
+
+        return {key: value for key, value in normalized.items() if value is not None}
+
     def _is_successful_trpc_response(
         self,
         response: aiohttp.ClientResponse,
@@ -348,6 +369,7 @@ class ProteusAPI:
                         "2": {"json": {"inverterId": self.inverter_id}},
                         "3": {"json": {"inverterId": self.inverter_id}},
                         "4": {"json": {"inverterId": self.inverter_id}},
+                        "5": {"json": {"inverterId": self.inverter_id}},
                     }
                 ),
             }
@@ -405,7 +427,7 @@ class ProteusAPI:
 
     def _parse_data(self, raw_data: Any) -> dict[str, Any]:
         """Parse raw API data into structured format."""
-        if not isinstance(raw_data, list) or len(raw_data) != 5:
+        if not isinstance(raw_data, list) or len(raw_data) < 5:
             _LOGGER.error("Missing data: %s", raw_data)
             return {}
 
@@ -466,6 +488,31 @@ class ProteusAPI:
                 parsed["target_soc"] = metadata.get("targetSoC")
                 parsed["predicted_production"] = metadata.get("predictedProduction")
                 parsed["predicted_consumption"] = metadata.get("predictedConsumption")
+
+            prices = self._get_trpc_result_json(raw_data, 5)
+            if isinstance(prices, dict):
+                consumption_price = prices.get("priceConsumptionMwh")
+                if isinstance(consumption_price, int | float):
+                    parsed["price_consumption_kwh"] = round(consumption_price / 1000, 4)
+
+                production_price = prices.get("priceProductionMwh")
+                if isinstance(production_price, int | float):
+                    parsed["price_production_kwh"] = round(production_price / 1000, 4)
+
+                price_components = prices.get("priceComponents")
+                if isinstance(price_components, dict):
+                    distribution_tariff_type = price_components.get(
+                        "distributionTariffType"
+                    )
+                    if distribution_tariff_type is not None:
+                        parsed["distribution_tariff_type"] = distribution_tariff_type
+
+                    normalized_price_components = self._normalize_price_components(
+                        price_components,
+                        price_mwh=prices.get("priceMwh"),
+                    )
+                    if normalized_price_components:
+                        parsed["price_components"] = normalized_price_components
 
         except Exception:
             _LOGGER.exception("Error parsing data")

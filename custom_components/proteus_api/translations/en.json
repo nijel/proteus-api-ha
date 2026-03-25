@@ -51,5 +51,111 @@
       "unknown": "Unexpected error"
     }
   },
+  "entity": {
+    "sensor": {
+      "flexibility_status": {
+        "name": "Flexibility status",
+        "state": {
+          "usable": "Usable",
+          "not_usable": "Not usable"
+        }
+      },
+      "mode": {
+        "name": "Mode"
+      },
+      "flexibility_mode": {
+        "name": "Flexibility mode"
+      },
+      "flexibility_today": {
+        "name": "Flexibility earnings today"
+      },
+      "flexibility_month": {
+        "name": "Flexibility earnings this month"
+      },
+      "flexibility_total": {
+        "name": "Flexibility earnings total"
+      },
+      "command": {
+        "name": "Flexibility command"
+      },
+      "command_end": {
+        "name": "Flexibility command end"
+      },
+      "battery_mode": {
+        "name": "Battery mode"
+      },
+      "battery_fallback_mode": {
+        "name": "Battery fallback mode"
+      },
+      "pv_mode": {
+        "name": "PV mode"
+      },
+      "target_soc": {
+        "name": "Target SoC"
+      },
+      "predicted_production": {
+        "name": "Predicted production"
+      },
+      "predicted_consumption": {
+        "name": "Predicted consumption"
+      },
+      "consumption_price": {
+        "name": "Consumption price"
+      },
+      "production_price": {
+        "name": "Production price"
+      },
+      "distribution_tariff": {
+        "name": "Distribution tariff",
+        "state": {
+          "ht": "High tariff",
+          "lt": "Low tariff"
+        }
+      }
+    },
+    "binary_sensor": {
+      "selling_instead_of_battery_charge": {
+        "name": "Sell instead of battery charging"
+      },
+      "selling_from_battery": {
+        "name": "Sell from battery"
+      },
+      "using_from_grid_instead_of_battery": {
+        "name": "Preserve battery energy"
+      },
+      "saving_to_battery": {
+        "name": "Charge battery from grid"
+      },
+      "blocking_grid_overflow": {
+        "name": "Block grid export"
+      }
+    },
+    "switch": {
+      "selling_instead_of_battery_charge": {
+        "name": "Sell instead of battery charging"
+      },
+      "selling_from_battery": {
+        "name": "Sell from battery"
+      },
+      "using_from_grid_instead_of_battery": {
+        "name": "Preserve battery energy"
+      },
+      "saving_to_battery": {
+        "name": "Charge battery from grid"
+      },
+      "blocking_grid_overflow": {
+        "name": "Block grid export"
+      },
+      "control_enabled": {
+        "name": "FVE control enabled"
+      },
+      "automatic_mode": {
+        "name": "Automatic mode"
+      },
+      "flexibility_mode": {
+        "name": "Flexibility trading"
+      }
+    }
+  },
   "title": "Proteus API"
 }

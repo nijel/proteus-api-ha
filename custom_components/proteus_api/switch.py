@@ -68,6 +68,8 @@ async def async_setup_entry(
 class ProteusBaseSwitch(CoordinatorEntity, SwitchEntity):
     """Base class for Proteus switches."""
 
+    _attr_has_entity_name = True
+
     def __init__(self, coordinator, config_entry, api, inverter_id, inverter):
         """Initialize the switch."""
         super().__init__(coordinator)
@@ -153,7 +155,7 @@ class ProteusManualControlSwitch(ProteusOptimisticSwitch):
         """Initialize the switch."""
         super().__init__(coordinator, config_entry, api, inverter_id, inverter)
         self._control_type = control_type
-        self._attr_name = f"Proteus {friendly_name}"
+        self._attr_translation_key = control_type.lower()
         self._attr_unique_id = self._get_unique_id(
             f"proteus_switch_{control_type.lower()}"
         )
@@ -212,7 +214,7 @@ class ProteusControlEnabledSwitch(ProteusOptimisticSwitch):
     def __init__(self, coordinator, config_entry, api, inverter_id, inverter):
         """Initialize the switch."""
         super().__init__(coordinator, config_entry, api, inverter_id, inverter)
-        self._attr_name = "Proteus řízení FVE"
+        self._attr_translation_key = "control_enabled"
         self._attr_unique_id = self._get_unique_id("proteus_switch_control_enabled")
         self._attr_icon = "mdi:network"
 
@@ -243,7 +245,7 @@ class ProteusAutomaticModeSwitch(ProteusOptimisticSwitch):
     def __init__(self, coordinator, config_entry, api, inverter_id, inverter):
         """Initialize the switch."""
         super().__init__(coordinator, config_entry, api, inverter_id, inverter)
-        self._attr_name = "Proteus optimalizace algoritmem"
+        self._attr_translation_key = "automatic_mode"
         self._attr_unique_id = self._get_unique_id("proteus_switch_automatic_mode")
         self._attr_icon = "mdi:creation"
 
@@ -281,7 +283,7 @@ class ProteusFlexibilityModeSwitch(ProteusOptimisticSwitch):
     def __init__(self, coordinator, config_entry, api, inverter_id, inverter):
         """Initialize the switch."""
         super().__init__(coordinator, config_entry, api, inverter_id, inverter)
-        self._attr_name = "Proteus obchodování flexibility"
+        self._attr_translation_key = "flexibility_mode"
         self._attr_unique_id = self._get_unique_id("proteus_switch_flexibility_mode")
         self._attr_icon = "mdi:robot"
 

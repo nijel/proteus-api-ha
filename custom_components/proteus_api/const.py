@@ -4,7 +4,7 @@ DOMAIN = "proteus_api"
 
 # API endpoints
 API_BASE_URL = "https://proteus.deltagreen.cz/api/trpc/"
-API_ENDPOINT = "inverters.detail,inverters.flexibilityRewardsSummary,inverters.controls.state,commands.current,inverters.currentStep"
+API_ENDPOINT = "inverters.detail,inverters.flexibilityRewardsSummary,inverters.controls.state,commands.current,inverters.currentStep,prices.currentDistributionPrices"
 API_LIST_ENDPOINT = "inverters.list"
 API_CONTROL_ENDPOINT = "inverters.controls.updateManualControl"
 API_ENABLED_ENDPOINT = "inverters.controls.updateControlEnabled"
@@ -25,6 +25,24 @@ FLEXIBILITY_CAPABILITIES = {
     "UP_POWER": "Dodavka do site",
     "DOWN_BATTERY_POWER": "Odber ze site do baterie",
     "DOWN_SOLAR_CURTAILMENT_POWER": "Zakaz pretoku",
+}
+
+FLEXIBILITY_CAPABILITY_LOCALIZED_NAMES = {
+    "en": {
+        "UP_POWER": "Export to grid",
+        "DOWN_BATTERY_POWER": "Charge battery from grid",
+        "DOWN_SOLAR_CURTAILMENT_POWER": "Block grid export",
+    },
+    "cs": {
+        "UP_POWER": "Dodávka do sítě",
+        "DOWN_BATTERY_POWER": "Odběr ze sítě do baterie",
+        "DOWN_SOLAR_CURTAILMENT_POWER": "Zákaz přetoků",
+    },
+}
+
+DISTRIBUTION_TARIFF_TYPES = {
+    "HT": "High tariff",
+    "LT": "Low tariff",
 }
 
 # States
