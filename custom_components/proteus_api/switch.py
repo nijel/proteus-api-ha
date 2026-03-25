@@ -310,7 +310,7 @@ class ProteusFlexibilityModeSwitch(ProteusOptimisticSwitch):
         if capabilities is None:
             return None
         return capabilities != []
-      
+
     def _get_backend_state(self) -> bool:
         """Return the latest backend state for this control."""
         return self.coordinator.data.get("flexibility_capabilities") != []
