@@ -1,6 +1,10 @@
 [tool.codespell]
 ignore-words-list = "hass"
 
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
 [tool.ruff]
 required-version = ">=0.12.1"
 target-version = "py313"
