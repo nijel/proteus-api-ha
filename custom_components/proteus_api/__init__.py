@@ -19,6 +19,54 @@ _LOGGER = logging.getLogger(__name__)
 PLATFORMS = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.SWITCH]
 
 
+def _normalize_email(email: str) -> str:
+    """Normalize an email address for use as a config entry unique ID."""
+    return email.strip().casefold()
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Migrate legacy single-inverter config entries to the account-wide format."""
+    if entry.version >= 2:
+        return True
+
+    _LOGGER.info(
+        "Migrating config entry %s from version %s", entry.entry_id, entry.version
+    )
+
+    if "inverter_id" not in entry.data:
+        hass.config_entries.async_update_entry(entry, version=2)
+        return True
+
+    normalized_email = _normalize_email(entry.data["email"])
+
+    for other_entry in hass.config_entries.async_entries(DOMAIN):
+        if other_entry.entry_id == entry.entry_id:
+            continue
+
+        if _normalize_email(other_entry.data.get("email", "")) != normalized_email:
+            continue
+
+        _LOGGER.info(
+            "Removing duplicate legacy config entry %s for account %s during migration",
+            entry.entry_id,
+            entry.data["email"],
+        )
+        await hass.config_entries.async_remove(entry.entry_id)
+        return False
+
+    hass.config_entries.async_update_entry(
+        entry,
+        data={
+            "email": entry.data["email"],
+            "password": entry.data["password"],
+        },
+        title=f"Proteus API ({entry.data['email']})",
+        unique_id=normalized_email,
+        version=2,
+    )
+    return True
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Proteus API from a config entry."""
     email = entry.data["email"]
