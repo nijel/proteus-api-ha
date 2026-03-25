@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .const import DOMAIN, FLEXIBILITY_CAPABILITY_LOCALIZED_NAMES, format_vendor_name
+from .const import DOMAIN, format_vendor_name
 
 CONTROL_TYPE_ICONS = {
     "SELLING_INSTEAD_OF_BATTERY_CHARGE": "mdi:transmission-tower-export",
@@ -27,14 +27,3 @@ def build_device_info(inverter_id: str, inverter: dict) -> dict:
 def get_control_type_icon(control_type: str) -> str:
     """Return the icon for a control type."""
     return CONTROL_TYPE_ICONS.get(control_type, "mdi:toggle-switch")
-
-
-def get_flexibility_capability_name(language: str, capability: str) -> str:
-    """Return the localized display name for a flexibility capability."""
-    language_variants = [language, language.split("-", 1)[0], "en"]
-    for variant in language_variants:
-        if variant in FLEXIBILITY_CAPABILITY_LOCALIZED_NAMES:
-            return FLEXIBILITY_CAPABILITY_LOCALIZED_NAMES[variant].get(
-                capability, capability
-            )
-    return capability

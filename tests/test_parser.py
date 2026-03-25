@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from custom_components.proteus_api.entity import get_flexibility_capability_name
 from custom_components.proteus_api.proteus_api import parse_data
 
 
@@ -134,9 +133,3 @@ def test_malformed_prices_do_not_break_existing_fields() -> None:
     assert parsed["flexibility_mode"] == "PARTIAL"
     assert "price_consumption_kwh" not in parsed
     assert "price_components" not in parsed
-
-
-def test_flexibility_capability_translation_uses_language_file() -> None:
-    """Capability names should come from the integration translations."""
-    assert get_flexibility_capability_name("en", "UP_POWER") == "Export to grid"
-    assert get_flexibility_capability_name("cs", "UP_POWER") == "Dodávka do sítě"

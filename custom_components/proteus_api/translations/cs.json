@@ -54,11 +54,7 @@
   "entity": {
     "sensor": {
       "flexibility_status": {
-        "name": "Flexibilita dostupná",
-        "state": {
-          "usable": "Dostupná",
-          "not_usable": "Nedostupná"
-        }
+        "name": "Flexibilita dostupná"
       },
       "mode": {
         "name": "Režim"
@@ -106,11 +102,7 @@
         "name": "Cena výroby"
       },
       "distribution_tariff": {
-        "name": "Distribuční tarif",
-        "state": {
-          "ht": "Vysoký tarif",
-          "lt": "Nízký tarif"
-        }
+        "name": "Distribuční tarif"
       }
     },
     "binary_sensor": {

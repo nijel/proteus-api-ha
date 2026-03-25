@@ -54,11 +54,7 @@
   "entity": {
     "sensor": {
       "flexibility_status": {
-        "name": "Flexibility status",
-        "state": {
-          "usable": "Usable",
-          "not_usable": "Not usable"
-        }
+        "name": "Flexibility status"
       },
       "mode": {
         "name": "Mode"
@@ -106,11 +102,7 @@
         "name": "Production price"
       },
       "distribution_tariff": {
-        "name": "Distribution tariff",
-        "state": {
-          "ht": "High tariff",
-          "lt": "Low tariff"
-        }
+        "name": "Distribution tariff"
       }
     },
     "binary_sensor": {
