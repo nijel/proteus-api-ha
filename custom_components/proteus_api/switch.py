@@ -12,7 +12,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONTROL_TYPES, DOMAIN, format_vendor_name
+from .const import CONTROL_TYPES, DOMAIN, FLEXIBILITY_CAPABILITIES, format_vendor_name
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -292,7 +292,7 @@ class ProteusFlexibilityModeSwitch(ProteusBaseSwitch):
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the switch on (enable automatic mode)."""
         success = await self._api.update_flexibility_mode(
-            ["UP_POWER", "DOWN_BATTERY_POWER", "DOWN_SOLAR_CURTAILMENT_POWER"]
+            list(FLEXIBILITY_CAPABILITIES)
         )
         if success:
             # Wait a bit and then refresh data

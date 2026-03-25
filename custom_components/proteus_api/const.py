@@ -21,6 +21,12 @@ CONTROL_TYPES = {
     "BLOCKING_GRID_OVERFLOW": "Zákaz přetoků",
 }
 
+FLEXIBILITY_CAPABILITIES = {
+    "UP_POWER": "Dodavka do site",
+    "DOWN_BATTERY_POWER": "Odber ze site do baterie",
+    "DOWN_SOLAR_CURTAILMENT_POWER": "Zakaz pretoku",
+}
+
 # States
 CONTROL_STATES = ["DISABLED", "ENABLED"]
 CONTROL_MODES = ["AUTOMATIC", "MANUAL"]
