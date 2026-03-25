@@ -149,6 +149,109 @@ class ProteusAPI:
         except (JSONDecodeError, KeyError, TypeError):
             return None
 
+    def _parse_response_body(self, response_text: str) -> Any | None:
+        """Parse JSON or JSONL response body if possible."""
+        if not response_text:
+            return None
+        try:
+            return json.loads(response_text)
+        except JSONDecodeError:
+            pass
+
+        lines = [line.strip() for line in response_text.splitlines() if line.strip()]
+        if not lines:
+            return None
+
+        parsed_lines = []
+        for line in lines:
+            try:
+                parsed_lines.append(json.loads(line))
+            except JSONDecodeError:
+                return None
+
+        if len(parsed_lines) == 1:
+            return parsed_lines[0]
+        return parsed_lines
+
+    def _iter_trpc_errors(self, payload: Any):
+        """Yield embedded tRPC error objects from a response payload."""
+        if isinstance(payload, dict):
+            error = payload.get("error")
+            if isinstance(error, dict):
+                yield error
+            for value in payload.values():
+                yield from self._iter_trpc_errors(value)
+            return
+
+        if isinstance(payload, list):
+            for item in payload:
+                yield from self._iter_trpc_errors(item)
+
+    def _format_trpc_error(self, error: dict[str, Any]) -> str:
+        """Format a tRPC error payload for logging."""
+        error_json = error.get("json")
+        message = None
+        code = None
+
+        if isinstance(error_json, dict):
+            message = error_json.get("message")
+            code = error_json.get("code")
+
+        if message is None:
+            message = error.get("message")
+        if code is None:
+            code = error.get("code")
+
+        if message and code is not None:
+            return f"{message} (code: {code})"
+        if message:
+            return str(message)
+        if code is not None:
+            return f"code: {code}"
+        return str(error)
+
+    def _extract_trpc_error_messages(self, payload: Any) -> list[str]:
+        """Extract all tRPC error messages from a response payload."""
+        return [
+            self._format_trpc_error(error) for error in self._iter_trpc_errors(payload)
+        ]
+
+    def _is_successful_trpc_response(
+        self,
+        response: aiohttp.ClientResponse,
+        response_text: str,
+        *,
+        operation: str,
+    ) -> bool:
+        """Check whether the response succeeded at both HTTP and tRPC layers."""
+        payload = self._parse_response_body(response_text)
+        error_messages = self._extract_trpc_error_messages(payload)
+
+        if response.status != 200:
+            if error_messages:
+                _LOGGER.error(
+                    "%s failed with status %s: %s",
+                    operation,
+                    response.status,
+                    "; ".join(error_messages),
+                )
+            else:
+                _LOGGER.error(
+                    "%s failed with status %s: %s",
+                    operation,
+                    response.status,
+                    response_text or "<empty response>",
+                )
+            return False
+
+        if error_messages:
+            _LOGGER.error(
+                "%s returned tRPC error: %s", operation, "; ".join(error_messages)
+            )
+            return False
+
+        return True
+
     async def _log_error(self, response: aiohttp.ClientResponse) -> None:
         try:
             data = await response.json()
@@ -324,8 +427,11 @@ class ProteusAPI:
             ) as response:
                 data = await response.text()
                 _LOGGER.debug("Response data: %s", data)
-
-                return response.status == 200
+                return self._is_successful_trpc_response(
+                    response,
+                    data,
+                    operation=f"Manual control update for {control_type}",
+                )
 
         except Exception:
             _LOGGER.exception("Error updating manual control")
@@ -353,7 +459,11 @@ class ProteusAPI:
             ) as response:
                 data = await response.text()
                 _LOGGER.debug("Response data: %s", data)
-                return response.status == 200
+                return self._is_successful_trpc_response(
+                    response,
+                    data,
+                    operation="Control enabled update",
+                )
 
         except Exception:
             _LOGGER.exception("Error updating enabled mode")
@@ -381,7 +491,11 @@ class ProteusAPI:
             ) as response:
                 data = await response.text()
                 _LOGGER.debug("Response data: %s", data)
-                return response.status == 200
+                return self._is_successful_trpc_response(
+                    response,
+                    data,
+                    operation="Control mode update",
+                )
 
         except Exception:
             _LOGGER.exception("Error updating control mode")
@@ -411,7 +525,11 @@ class ProteusAPI:
             ) as response:
                 data = await response.text()
                 _LOGGER.debug("Response data: %s", data)
-                return response.status == 200
+                return self._is_successful_trpc_response(
+                    response,
+                    data,
+                    operation="Flexibility mode update",
+                )
 
         except Exception:
             _LOGGER.exception("Error updating flexibility mode")
