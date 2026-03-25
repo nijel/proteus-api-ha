@@ -18,7 +18,7 @@ from homeassistant.helpers.event import async_track_point_in_time
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
-from .const import COMMAND_NONE, DOMAIN, format_vendor_name
+from .const import COMMAND_NONE, DOMAIN, FLEXIBILITY_CAPABILITIES, format_vendor_name
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -157,6 +157,24 @@ class ProteusFlexibilityModeSensor(ProteusBaseSensor):
         if self.coordinator.data is None:
             return None
         return self.coordinator.data.get("flexibility_mode")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, list[str]] | None:
+        """Return enabled flexibility capabilities."""
+        if self.coordinator.data is None:
+            return None
+
+        capabilities = self.coordinator.data.get("flexibility_capabilities")
+        if capabilities is None:
+            return None
+
+        return {
+            "enabled_capabilities": capabilities,
+            "enabled_capability_names": [
+                FLEXIBILITY_CAPABILITIES.get(capability, capability)
+                for capability in capabilities
+            ],
+        }
 
 
 class ProteusFlexibilityTodaySensor(ProteusBaseSensor):

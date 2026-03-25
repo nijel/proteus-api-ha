@@ -22,6 +22,7 @@ from .const import (
     API_LOGIN_ENDPOINT,
     API_MODE_ENDPOINT,
     COMMAND_NONE,
+    FLEXIBILITY_CAPABILITIES,
     TID_DELTA_GREEN,
     UPDATE_INTERVAL,
 )
@@ -388,6 +389,14 @@ class ProteusAPI:
             parsed["flexibility_capabilities"] = controls[
                 "flexibilityCapabilitiesEnabled"
             ]
+            enabled_capabilities = set(parsed["flexibility_capabilities"])
+            all_capabilities = set(FLEXIBILITY_CAPABILITIES)
+            if not enabled_capabilities:
+                parsed["flexibility_mode"] = "NONE"
+            elif enabled_capabilities == all_capabilities:
+                parsed["flexibility_mode"] = "FULL"
+            else:
+                parsed["flexibility_mode"] = "PARTIAL"
 
             # Current command
             command_data = raw_data[3]["result"]["data"]["json"]
