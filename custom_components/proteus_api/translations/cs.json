@@ -51,5 +51,111 @@
       "unknown": "Neočekávaná chyba"
     }
   },
+  "entity": {
+    "sensor": {
+      "flexibility_status": {
+        "name": "Flexibilita dostupná",
+        "state": {
+          "usable": "Dostupná",
+          "not_usable": "Nedostupná"
+        }
+      },
+      "mode": {
+        "name": "Režim"
+      },
+      "flexibility_mode": {
+        "name": "Režim flexibility"
+      },
+      "flexibility_today": {
+        "name": "Obchodování flexibility dnes"
+      },
+      "flexibility_month": {
+        "name": "Obchodování flexibility za měsíc"
+      },
+      "flexibility_total": {
+        "name": "Obchodování flexibility celkem"
+      },
+      "command": {
+        "name": "Příkaz flexibility"
+      },
+      "command_end": {
+        "name": "Konec flexibility"
+      },
+      "battery_mode": {
+        "name": "Režim baterie"
+      },
+      "battery_fallback_mode": {
+        "name": "Záložní režim baterie"
+      },
+      "pv_mode": {
+        "name": "Režim výroby"
+      },
+      "target_soc": {
+        "name": "Cílový SoC"
+      },
+      "predicted_production": {
+        "name": "Odhad výroby"
+      },
+      "predicted_consumption": {
+        "name": "Odhad spotřeby"
+      },
+      "consumption_price": {
+        "name": "Cena spotřeby"
+      },
+      "production_price": {
+        "name": "Cena výroby"
+      },
+      "distribution_tariff": {
+        "name": "Distribuční tarif",
+        "state": {
+          "ht": "Vysoký tarif",
+          "lt": "Nízký tarif"
+        }
+      }
+    },
+    "binary_sensor": {
+      "selling_instead_of_battery_charge": {
+        "name": "Prodej do sítě místo nabíjení"
+      },
+      "selling_from_battery": {
+        "name": "Prodej z baterie do sítě"
+      },
+      "using_from_grid_instead_of_battery": {
+        "name": "Šetření energie v baterii"
+      },
+      "saving_to_battery": {
+        "name": "Nabíjení baterie ze sítě"
+      },
+      "blocking_grid_overflow": {
+        "name": "Zákaz přetoků"
+      }
+    },
+    "switch": {
+      "selling_instead_of_battery_charge": {
+        "name": "Prodej do sítě místo nabíjení"
+      },
+      "selling_from_battery": {
+        "name": "Prodej z baterie do sítě"
+      },
+      "using_from_grid_instead_of_battery": {
+        "name": "Šetření energie v baterii"
+      },
+      "saving_to_battery": {
+        "name": "Nabíjení baterie ze sítě"
+      },
+      "blocking_grid_overflow": {
+        "name": "Zákaz přetoků"
+      },
+      "control_enabled": {
+        "name": "Řízení FVE"
+      },
+      "automatic_mode": {
+        "name": "Optimalizace algoritmem"
+      },
+      "flexibility_mode": {
+        "name": "Obchodování flexibility"
+      }
+    }
+  },
   "title": "Proteus API"
 }

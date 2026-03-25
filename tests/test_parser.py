@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from custom_components.proteus_api.entity import get_flexibility_capability_name
 from custom_components.proteus_api.proteus_api import ProteusAPI
 
 
@@ -42,6 +43,27 @@ def _build_payload(capabilities: list[str]) -> list[dict]:
         },
         {"result": {"data": {"json": {}}}},
         {"result": {"data": {"json": None}}},
+        {
+            "result": {
+                "data": {
+                    "json": {
+                        "priceMwh": 4161.4218,
+                        "priceConsumptionMwh": 8417.258278,
+                        "priceProductionMwh": 3711.4218,
+                        "priceComponents": {
+                            "distributionPrice": 2252.45,
+                            "distributionTariffType": "HT",
+                            "feeElectricityBuy": 350,
+                            "feeElectricitySell": 450,
+                            "taxElectricity": 28.3,
+                            "systemServices": 164.24,
+                            "poze": 0,
+                            "vatRate": 0.21,
+                        },
+                    }
+                }
+            }
+        },
     ]
 
 
@@ -75,3 +97,52 @@ def test_sets_none_mode_for_empty_capabilities() -> None:
     parsed = api._parse_data(_build_payload([]))  # noqa: SLF001
 
     assert parsed["flexibility_mode"] == "NONE"
+
+
+def test_parses_distribution_prices() -> None:
+    """Distribution prices should be converted to per-kWh sensors."""
+    api = ProteusAPI("inverter-id", "user@example.com", "secret")
+    parsed = api._parse_data(_build_payload(["UP_POWER"]))  # noqa: SLF001
+
+    assert parsed["price_consumption_kwh"] == 8.4173
+    assert parsed["price_production_kwh"] == 3.7114
+    assert parsed["distribution_tariff_type"] == "HT"
+    assert parsed["price_components"] == {
+        "price_mwh": 4161.4218,
+        "distribution_price": 2252.45,
+        "distribution_tariff_type": "HT",
+        "fee_electricity_buy": 350,
+        "fee_electricity_sell": 450,
+        "tax_electricity": 28.3,
+        "system_services": 164.24,
+        "poze": 0,
+        "vat_rate": 0.21,
+    }
+
+
+def test_missing_prices_do_not_break_existing_fields() -> None:
+    """Legacy 5-item payloads should still parse existing fields."""
+    api = ProteusAPI("inverter-id", "user@example.com", "secret")
+    parsed = api._parse_data(_build_payload(["UP_POWER"])[:5])  # noqa: SLF001
+
+    assert parsed["flexibility_mode"] == "PARTIAL"
+    assert "price_consumption_kwh" not in parsed
+
+
+def test_malformed_prices_do_not_break_existing_fields() -> None:
+    """Malformed price payloads should not break the rest of the parse."""
+    api = ProteusAPI("inverter-id", "user@example.com", "secret")
+    payload = _build_payload(["UP_POWER"])
+    payload[5] = {"result": {"data": {"json": {"priceComponents": "invalid"}}}}
+
+    parsed = api._parse_data(payload)  # noqa: SLF001
+
+    assert parsed["flexibility_mode"] == "PARTIAL"
+    assert "price_consumption_kwh" not in parsed
+    assert "price_components" not in parsed
+
+
+def test_flexibility_capability_translation_uses_language_file() -> None:
+    """Capability names should come from the integration translations."""
+    assert get_flexibility_capability_name("en", "UP_POWER") == "Export to grid"
+    assert get_flexibility_capability_name("cs", "UP_POWER") == "Dodávka do sítě"

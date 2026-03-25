@@ -66,6 +66,10 @@ Integrace automaticky objeví všechny invertory dostupné ve vašem účtu a vy
 - `sensor.proteus_cilovy_soc` - Cílový SOC baterie
 - `sensor.proteus_odhad_vyroby` - Předpovězená výroba
 - `sensor.proteus_odhad_spotreby` - Předpovězená spotřeba
+- `sensor.proteus_cena_spotreby` - Aktuální cena spotřeby v Kč/kWh
+  - atributy: `price_mwh`, `distribution_price`, `distribution_tariff_type`, `fee_electricity_buy`, `fee_electricity_sell`, `tax_electricity`, `system_services`, `poze`, `vat_rate`
+- `sensor.proteus_cena_vyroby` - Aktuální cena výroby v Kč/kWh
+- `sensor.proteus_distribucni_tarif` - Aktuální distribuční tarif (`HT` = High tariff, `LT` = Low tariff)
 
 ### Binární sensory
 
