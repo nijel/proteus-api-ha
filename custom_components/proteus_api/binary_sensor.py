@@ -10,7 +10,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONTROL_TYPES, DOMAIN, format_vendor_name
+from .const import CONTROL_TYPES, DOMAIN
+from .entity import build_device_info, get_control_type_icon
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -52,13 +53,7 @@ class ProteusBaseBinarySensor(CoordinatorEntity, BinarySensorEntity):
         self._config_entry = config_entry
         self._inverter_id = inverter_id
         self._inverter = inverter
-        vendor_name = format_vendor_name(inverter.get("vendor", "Unknown"))
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, inverter_id)},
-            "name": f"{vendor_name} Inverter",
-            "manufacturer": vendor_name,
-            "model": "Proteus",
-        }
+        self._attr_device_info = build_device_info(inverter_id, inverter)
 
     def _get_unique_id(self, base_id: str) -> str:
         """Get unique ID with inverter_id suffix."""
@@ -82,18 +77,7 @@ class ProteusManualControlBinarySensor(ProteusBaseBinarySensor):
         self._control_type = control_type
         self._attr_name = f"Proteus {friendly_name}"
         self._attr_unique_id = self._get_unique_id(f"proteus_{control_type.lower()}")
-        self._attr_icon = self._get_icon_for_control_type(control_type)
-
-    def _get_icon_for_control_type(self, control_type: str) -> str:
-        """Get icon for control type."""
-        icons = {
-            "SELLING_INSTEAD_OF_BATTERY_CHARGE": "mdi:transmission-tower-export",
-            "SELLING_FROM_BATTERY": "mdi:battery-arrow-up",
-            "USING_FROM_GRID_INSTEAD_OF_BATTERY": "mdi:battery-lock",
-            "SAVING_TO_BATTERY": "mdi:battery-arrow-down",
-            "BLOCKING_GRID_OVERFLOW": "mdi:transmission-tower-off",
-        }
-        return icons.get(control_type, "mdi:toggle-switch")
+        self._attr_icon = get_control_type_icon(control_type)
 
     @property
     def is_on(self) -> bool | None:

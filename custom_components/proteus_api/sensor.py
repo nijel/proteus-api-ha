@@ -18,7 +18,8 @@ from homeassistant.helpers.event import async_track_point_in_time
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
-from .const import COMMAND_NONE, DOMAIN, FLEXIBILITY_CAPABILITIES, format_vendor_name
+from .const import COMMAND_NONE, DOMAIN, FLEXIBILITY_CAPABILITIES
+from .entity import build_device_info
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -89,13 +90,7 @@ class ProteusBaseSensor(CoordinatorEntity, SensorEntity):
         self._config_entry = config_entry
         self._inverter_id = inverter_id
         self._inverter = inverter
-        vendor_name = format_vendor_name(inverter.get("vendor", "Unknown"))
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, inverter_id)},
-            "name": f"{vendor_name} Inverter",
-            "manufacturer": vendor_name,
-            "model": "Proteus",
-        }
+        self._attr_device_info = build_device_info(inverter_id, inverter)
 
     def _get_unique_id(self, base_id: str) -> str:
         """Get unique ID with inverter_id suffix."""
