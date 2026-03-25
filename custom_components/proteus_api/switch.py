@@ -8,7 +8,7 @@ from typing import Any
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -109,6 +109,7 @@ class ProteusManualControlSwitch(ProteusBaseSwitch):
             f"proteus_switch_{control_type.lower()}"
         )
         self._attr_icon = self._get_icon_for_control_type(control_type)
+        self._optimistic_state: bool | None = None
 
     def _get_icon_for_control_type(self, control_type: str) -> str:
         """Get icon for control type."""
@@ -134,30 +135,51 @@ class ProteusManualControlSwitch(ProteusBaseSwitch):
     @property
     def is_on(self) -> bool | None:
         """Return true if the switch is on."""
+        if self._optimistic_state is not None:
+            return self._optimistic_state
         if self.coordinator.data is None:
             return None
+        return self._get_backend_state()
+
+    def _get_backend_state(self) -> bool:
+        """Return the latest backend state for this control."""
         manual_controls = self.coordinator.data.get("manual_controls", {})
         return manual_controls.get(self._control_type, False)
 
+    def _set_optimistic_state(self, state: bool | None) -> None:
+        """Update optimistic state and refresh the entity."""
+        self._optimistic_state = state
+        self.async_write_ha_state()
+
+    async def _set_manual_control(self, enabled: bool) -> None:
+        """Apply a manual control change with optimistic UI state."""
+        self._set_optimistic_state(enabled)
+        success = await self._api.update_manual_control(
+            self._control_type, "ENABLED" if enabled else "DISABLED"
+        )
+        if not success:
+            self._set_optimistic_state(None)
+            _LOGGER.error(
+                "Failed to turn %s %s",
+                "on" if enabled else "off",
+                self._control_type,
+            )
+            return
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Handle updated data from the coordinator."""
+        if self._optimistic_state is not None:
+            self._set_optimistic_state(None)
+        super()._handle_coordinator_update()
+
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the switch on."""
-        success = await self._api.update_manual_control(self._control_type, "ENABLED")
-        if success:
-            # Wait a bit and then refresh data
-            await asyncio.sleep(2)
-            await self.coordinator.async_request_refresh()
-        else:
-            _LOGGER.error("Failed to turn on %s", self._control_type)
+        await self._set_manual_control(True)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the switch off."""
-        success = await self._api.update_manual_control(self._control_type, "DISABLED")
-        if success:
-            # Wait a bit and then refresh data
-            await asyncio.sleep(2)
-            await self.coordinator.async_request_refresh()
-        else:
-            _LOGGER.error("Failed to turn off %s", self._control_type)
+        await self._set_manual_control(False)
 
 
 class ProteusControlEnabledSwitch(ProteusBaseSwitch):
