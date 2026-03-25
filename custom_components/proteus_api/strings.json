@@ -44,6 +44,7 @@
       }
     },
     "error": {
+      "already_configured": "This account is already configured",
       "cannot_connect": "Cannot connect to Proteus API",
       "invalid_auth": "Invalid authentication credentials",
       "no_inverters": "No inverters found for this account",

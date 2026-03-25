@@ -37,6 +37,11 @@ UPDATE_INTERVAL = 10
 TID_DELTA_GREEN = "TID_DELTA_GREEN"
 
 
+def normalize_email(email: str) -> str:
+    """Normalize an email address for use as a config entry unique ID."""
+    return email.strip().casefold()
+
+
 def format_vendor_name(vendor_name: str) -> str:
     """Format vendor name from API format to human-friendly format.
 

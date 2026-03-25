@@ -12,7 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 
-from .const import DOMAIN
+from .const import DOMAIN, normalize_email
 from .proteus_api import AuthenticationError, ProteusAPI
 
 _LOGGER = logging.getLogger(__name__)
@@ -139,7 +139,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         else:
             # Check if this account is already configured
             # Use normalized email as unique identifier since we're discovering all inverters
-            normalized_email = user_input["email"].strip().casefold()
+            normalized_email = normalize_email(user_input["email"])
             await self.async_set_unique_id(normalized_email)
             self._abort_if_unique_id_configured()
 
@@ -186,6 +186,18 @@ class OptionsFlow(config_entries.OptionsFlow):
             else:
                 # Update the config entry with new credentials
                 # Preserve existing data and only update email/password
+                normalized_email = normalize_email(user_input["email"])
+
+                for entry in self.hass.config_entries.async_entries(DOMAIN):
+                    if entry.entry_id == self.config_entry.entry_id:
+                        continue
+                    if entry.unique_id == normalized_email:
+                        return self.async_show_form(
+                            step_id="init",
+                            data_schema=self._get_options_schema(),
+                            errors={"base": "already_configured"},
+                        )
+
                 updated_data = dict(self.config_entry.data)
                 updated_data["email"] = user_input["email"]
                 updated_data["password"] = user_input["password"]
@@ -194,6 +206,7 @@ class OptionsFlow(config_entries.OptionsFlow):
                     self.config_entry,
                     data=updated_data,
                     title=info["title"],
+                    unique_id=normalized_email,
                 )
                 # Reload the config entry to apply new credentials
                 await self.hass.config_entries.async_reload(self.config_entry.entry_id)
