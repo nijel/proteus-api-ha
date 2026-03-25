@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from custom_components.proteus_api.entity import get_flexibility_capability_name
-from custom_components.proteus_api.proteus_api import ProteusAPI
+from custom_components.proteus_api.proteus_api import parse_data
 
 
 def _build_payload(capabilities: list[str]) -> list[dict]:
@@ -69,8 +69,7 @@ def _build_payload(capabilities: list[str]) -> list[dict]:
 
 def test_sets_full_mode_for_all_capabilities() -> None:
     """All supported capabilities should map to FULL mode."""
-    api = ProteusAPI("inverter-id", "user@example.com", "secret")
-    parsed = api._parse_data(  # noqa: SLF001
+    parsed = parse_data(
         _build_payload(
             [
                 "UP_POWER",
@@ -85,24 +84,21 @@ def test_sets_full_mode_for_all_capabilities() -> None:
 
 def test_sets_partial_mode_for_subset_of_capabilities() -> None:
     """A subset of capabilities should map to PARTIAL mode."""
-    api = ProteusAPI("inverter-id", "user@example.com", "secret")
-    parsed = api._parse_data(_build_payload(["UP_POWER"]))  # noqa: SLF001
+    parsed = parse_data(_build_payload(["UP_POWER"]))
 
     assert parsed["flexibility_mode"] == "PARTIAL"
 
 
 def test_sets_none_mode_for_empty_capabilities() -> None:
     """No enabled capabilities should map to NONE mode."""
-    api = ProteusAPI("inverter-id", "user@example.com", "secret")
-    parsed = api._parse_data(_build_payload([]))  # noqa: SLF001
+    parsed = parse_data(_build_payload([]))
 
     assert parsed["flexibility_mode"] == "NONE"
 
 
 def test_parses_distribution_prices() -> None:
     """Distribution prices should be converted to per-kWh sensors."""
-    api = ProteusAPI("inverter-id", "user@example.com", "secret")
-    parsed = api._parse_data(_build_payload(["UP_POWER"]))  # noqa: SLF001
+    parsed = parse_data(_build_payload(["UP_POWER"]))
 
     assert parsed["price_consumption_kwh"] == 8.4173
     assert parsed["price_production_kwh"] == 3.7114
@@ -122,8 +118,7 @@ def test_parses_distribution_prices() -> None:
 
 def test_missing_prices_do_not_break_existing_fields() -> None:
     """Legacy 5-item payloads should still parse existing fields."""
-    api = ProteusAPI("inverter-id", "user@example.com", "secret")
-    parsed = api._parse_data(_build_payload(["UP_POWER"])[:5])  # noqa: SLF001
+    parsed = parse_data(_build_payload(["UP_POWER"])[:5])
 
     assert parsed["flexibility_mode"] == "PARTIAL"
     assert "price_consumption_kwh" not in parsed
@@ -131,11 +126,10 @@ def test_missing_prices_do_not_break_existing_fields() -> None:
 
 def test_malformed_prices_do_not_break_existing_fields() -> None:
     """Malformed price payloads should not break the rest of the parse."""
-    api = ProteusAPI("inverter-id", "user@example.com", "secret")
     payload = _build_payload(["UP_POWER"])
     payload[5] = {"result": {"data": {"json": {"priceComponents": "invalid"}}}}
 
-    parsed = api._parse_data(payload)  # noqa: SLF001
+    parsed = parse_data(payload)
 
     assert parsed["flexibility_mode"] == "PARTIAL"
     assert "price_consumption_kwh" not in parsed

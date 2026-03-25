@@ -44,6 +44,182 @@ class InverterDict(TypedDict):
     vendor: str
 
 
+def iter_trpc_errors(payload: Any):
+    """Yield top-level tRPC error objects from a response payload."""
+    if isinstance(payload, dict):
+        if "error" in payload and (
+            len(payload) == 1 or "result" in payload or "meta" in payload
+        ):
+            error = payload.get("error")
+            if isinstance(error, dict):
+                yield error
+        return
+
+    if isinstance(payload, list):
+        for item in payload:
+            if isinstance(item, dict):
+                yield from iter_trpc_errors(item)
+
+
+def format_trpc_error(error: dict[str, Any]) -> str:
+    """Format a tRPC error payload for logging."""
+    error_json = error.get("json")
+    message = None
+    code = None
+
+    if isinstance(error_json, dict):
+        message = error_json.get("message")
+        code = error_json.get("code")
+
+    if message is None:
+        message = error.get("message")
+    if code is None:
+        code = error.get("code")
+
+    if message and code is not None:
+        return f"{message} (code: {code})"
+    if message:
+        return str(message)
+    if code is not None:
+        return f"code: {code}"
+    return str(error)
+
+
+def extract_trpc_error_messages(payload: Any) -> list[str]:
+    """Extract all tRPC error messages from a response payload."""
+    return [format_trpc_error(error) for error in iter_trpc_errors(payload)]
+
+
+def get_trpc_result_json(payload: Any, index: int) -> Any | None:
+    """Return one JSON result from a batched tRPC payload."""
+    if not isinstance(payload, list) or len(payload) <= index:
+        return None
+
+    try:
+        return payload[index]["result"]["data"]["json"]
+    except (KeyError, TypeError):
+        return None
+
+
+def normalize_price_components(
+    price_components: Any, *, price_mwh: Any
+) -> dict[str, Any]:
+    """Convert raw price components into Home Assistant-friendly attributes."""
+    if not isinstance(price_components, dict):
+        return {}
+
+    normalized = {
+        "price_mwh": price_mwh,
+        "distribution_price": price_components.get("distributionPrice"),
+        "distribution_tariff_type": price_components.get("distributionTariffType"),
+        "fee_electricity_buy": price_components.get("feeElectricityBuy"),
+        "fee_electricity_sell": price_components.get("feeElectricitySell"),
+        "tax_electricity": price_components.get("taxElectricity"),
+        "system_services": price_components.get("systemServices"),
+        "poze": price_components.get("poze"),
+        "vat_rate": price_components.get("vatRate"),
+    }
+
+    return {key: value for key, value in normalized.items() if value is not None}
+
+
+def parse_data(raw_data: Any) -> dict[str, Any]:
+    """Parse raw API data into structured format."""
+    if not isinstance(raw_data, list) or len(raw_data) < 5:
+        _LOGGER.error("Missing data: %s", raw_data)
+        return {}
+
+    parsed = {}
+
+    try:
+        detail = get_trpc_result_json(raw_data, 0)
+        if isinstance(detail, dict):
+            parsed["flexibility_state"] = detail["household"]["flexibilityState"]
+            parsed["control_mode"] = detail["controlMode"]
+            parsed["control_enabled"] = detail["controlEnabled"]
+
+        rewards = get_trpc_result_json(raw_data, 1)
+        if isinstance(rewards, dict):
+            parsed["flexibility_today"] = round(rewards["todayWithVat"], 2)
+            parsed["flexibility_month"] = round(rewards["monthToDateWithVat"], 2)
+            parsed["flexibility_total"] = round(rewards["totalWithVat"], 2)
+
+        controls = get_trpc_result_json(raw_data, 2)
+        if isinstance(controls, dict):
+            manual_controls = controls["manualControls"]
+            parsed["manual_controls"] = {}
+            for control in manual_controls:
+                parsed["manual_controls"][control["type"]] = (
+                    control["state"] == "ENABLED"
+                )
+
+            parsed["flexibility_capabilities"] = controls[
+                "flexibilityCapabilitiesEnabled"
+            ]
+            enabled_capabilities = set(parsed["flexibility_capabilities"])
+            all_capabilities = set(FLEXIBILITY_CAPABILITIES)
+            if not enabled_capabilities:
+                parsed["flexibility_mode"] = "NONE"
+            elif enabled_capabilities == all_capabilities:
+                parsed["flexibility_mode"] = "FULL"
+            else:
+                parsed["flexibility_mode"] = "PARTIAL"
+
+        command_data = get_trpc_result_json(raw_data, 3)
+        if isinstance(command_data, dict) and command_data.get("command"):
+            parsed["current_command"] = command_data["command"]["type"]
+            parsed["command_end"] = datetime.fromisoformat(
+                command_data["command"]["endAt"]
+            )
+        elif command_data is not None:
+            parsed["current_command"] = COMMAND_NONE
+            parsed["command_end"] = None
+
+        current_step = get_trpc_result_json(raw_data, 4)
+        if isinstance(current_step, dict):
+            metadata = current_step["metadata"]
+            parsed["flexalgo_battery"] = metadata.get("flexalgoBattery")
+            parsed["flexalgo_battery_fallback"] = metadata.get(
+                "flexalgoBatteryFallback"
+            )
+            parsed["flexalgo_pv"] = metadata.get("flexalgoPv")
+            parsed["target_soc"] = metadata.get("targetSoC")
+            parsed["predicted_production"] = metadata.get("predictedProduction")
+            parsed["predicted_consumption"] = metadata.get("predictedConsumption")
+
+        prices = get_trpc_result_json(raw_data, 5)
+        if isinstance(prices, dict):
+            consumption_price = prices.get("priceConsumptionMwh")
+            if isinstance(consumption_price, int | float):
+                parsed["price_consumption_kwh"] = round(consumption_price / 1000, 4)
+
+            production_price = prices.get("priceProductionMwh")
+            if isinstance(production_price, int | float):
+                parsed["price_production_kwh"] = round(production_price / 1000, 4)
+
+            price_components = prices.get("priceComponents")
+            if isinstance(price_components, dict):
+                distribution_tariff_type = price_components.get(
+                    "distributionTariffType"
+                )
+                if distribution_tariff_type is not None:
+                    parsed["distribution_tariff_type"] = distribution_tariff_type
+
+                normalized_price_components = normalize_price_components(
+                    price_components,
+                    price_mwh=prices.get("priceMwh"),
+                )
+                if normalized_price_components:
+                    parsed["price_components"] = normalized_price_components
+
+    except Exception:
+        _LOGGER.exception("Error parsing data")
+        return {}
+
+    _LOGGER.debug("Parsed status %s", parsed)
+    return parsed
+
+
 class ProteusAPI:
     """Proteus API client."""
 
@@ -176,79 +352,25 @@ class ProteusAPI:
 
     def _iter_trpc_errors(self, payload: Any):
         """Yield top-level tRPC error objects from a response payload."""
-        if isinstance(payload, dict):
-            if "error" in payload and (
-                len(payload) == 1 or "result" in payload or "meta" in payload
-            ):
-                error = payload.get("error")
-                if isinstance(error, dict):
-                    yield error
-            return
-
-        if isinstance(payload, list):
-            for item in payload:
-                if isinstance(item, dict):
-                    yield from self._iter_trpc_errors(item)
+        yield from iter_trpc_errors(payload)
 
     def _format_trpc_error(self, error: dict[str, Any]) -> str:
         """Format a tRPC error payload for logging."""
-        error_json = error.get("json")
-        message = None
-        code = None
-
-        if isinstance(error_json, dict):
-            message = error_json.get("message")
-            code = error_json.get("code")
-
-        if message is None:
-            message = error.get("message")
-        if code is None:
-            code = error.get("code")
-
-        if message and code is not None:
-            return f"{message} (code: {code})"
-        if message:
-            return str(message)
-        if code is not None:
-            return f"code: {code}"
-        return str(error)
+        return format_trpc_error(error)
 
     def _extract_trpc_error_messages(self, payload: Any) -> list[str]:
         """Extract all tRPC error messages from a response payload."""
-        return [
-            self._format_trpc_error(error) for error in self._iter_trpc_errors(payload)
-        ]
+        return extract_trpc_error_messages(payload)
 
     def _get_trpc_result_json(self, payload: Any, index: int) -> Any | None:
         """Return one JSON result from a batched tRPC payload."""
-        if not isinstance(payload, list) or len(payload) <= index:
-            return None
-
-        try:
-            return payload[index]["result"]["data"]["json"]
-        except (KeyError, TypeError):
-            return None
+        return get_trpc_result_json(payload, index)
 
     def _normalize_price_components(
         self, price_components: Any, *, price_mwh: Any
     ) -> dict[str, Any]:
         """Convert raw price components into Home Assistant-friendly attributes."""
-        if not isinstance(price_components, dict):
-            return {}
-
-        normalized = {
-            "price_mwh": price_mwh,
-            "distribution_price": price_components.get("distributionPrice"),
-            "distribution_tariff_type": price_components.get("distributionTariffType"),
-            "fee_electricity_buy": price_components.get("feeElectricityBuy"),
-            "fee_electricity_sell": price_components.get("feeElectricitySell"),
-            "tax_electricity": price_components.get("taxElectricity"),
-            "system_services": price_components.get("systemServices"),
-            "poze": price_components.get("poze"),
-            "vat_rate": price_components.get("vatRate"),
-        }
-
-        return {key: value for key, value in normalized.items() if value is not None}
+        return normalize_price_components(price_components, price_mwh=price_mwh)
 
     def _is_successful_trpc_response(
         self,
@@ -427,99 +549,7 @@ class ProteusAPI:
 
     def _parse_data(self, raw_data: Any) -> dict[str, Any]:
         """Parse raw API data into structured format."""
-        if not isinstance(raw_data, list) or len(raw_data) < 5:
-            _LOGGER.error("Missing data: %s", raw_data)
-            return {}
-
-        parsed = {}
-
-        try:
-            detail = self._get_trpc_result_json(raw_data, 0)
-            if isinstance(detail, dict):
-                parsed["flexibility_state"] = detail["household"]["flexibilityState"]
-                parsed["control_mode"] = detail["controlMode"]
-                parsed["control_enabled"] = detail["controlEnabled"]
-
-            rewards = self._get_trpc_result_json(raw_data, 1)
-            if isinstance(rewards, dict):
-                parsed["flexibility_today"] = round(rewards["todayWithVat"], 2)
-                parsed["flexibility_month"] = round(rewards["monthToDateWithVat"], 2)
-                parsed["flexibility_total"] = round(rewards["totalWithVat"], 2)
-
-            controls = self._get_trpc_result_json(raw_data, 2)
-            if isinstance(controls, dict):
-                manual_controls = controls["manualControls"]
-                parsed["manual_controls"] = {}
-                for control in manual_controls:
-                    parsed["manual_controls"][control["type"]] = (
-                        control["state"] == "ENABLED"
-                    )
-
-                parsed["flexibility_capabilities"] = controls[
-                    "flexibilityCapabilitiesEnabled"
-                ]
-                enabled_capabilities = set(parsed["flexibility_capabilities"])
-                all_capabilities = set(FLEXIBILITY_CAPABILITIES)
-                if not enabled_capabilities:
-                    parsed["flexibility_mode"] = "NONE"
-                elif enabled_capabilities == all_capabilities:
-                    parsed["flexibility_mode"] = "FULL"
-                else:
-                    parsed["flexibility_mode"] = "PARTIAL"
-
-            command_data = self._get_trpc_result_json(raw_data, 3)
-            if isinstance(command_data, dict) and command_data.get("command"):
-                parsed["current_command"] = command_data["command"]["type"]
-                parsed["command_end"] = datetime.fromisoformat(
-                    command_data["command"]["endAt"]
-                )
-            elif command_data is not None:
-                parsed["current_command"] = COMMAND_NONE
-                parsed["command_end"] = None
-
-            current_step = self._get_trpc_result_json(raw_data, 4)
-            if isinstance(current_step, dict):
-                metadata = current_step["metadata"]
-                parsed["flexalgo_battery"] = metadata.get("flexalgoBattery")
-                parsed["flexalgo_battery_fallback"] = metadata.get(
-                    "flexalgoBatteryFallback"
-                )
-                parsed["flexalgo_pv"] = metadata.get("flexalgoPv")
-                parsed["target_soc"] = metadata.get("targetSoC")
-                parsed["predicted_production"] = metadata.get("predictedProduction")
-                parsed["predicted_consumption"] = metadata.get("predictedConsumption")
-
-            prices = self._get_trpc_result_json(raw_data, 5)
-            if isinstance(prices, dict):
-                consumption_price = prices.get("priceConsumptionMwh")
-                if isinstance(consumption_price, int | float):
-                    parsed["price_consumption_kwh"] = round(consumption_price / 1000, 4)
-
-                production_price = prices.get("priceProductionMwh")
-                if isinstance(production_price, int | float):
-                    parsed["price_production_kwh"] = round(production_price / 1000, 4)
-
-                price_components = prices.get("priceComponents")
-                if isinstance(price_components, dict):
-                    distribution_tariff_type = price_components.get(
-                        "distributionTariffType"
-                    )
-                    if distribution_tariff_type is not None:
-                        parsed["distribution_tariff_type"] = distribution_tariff_type
-
-                    normalized_price_components = self._normalize_price_components(
-                        price_components,
-                        price_mwh=prices.get("priceMwh"),
-                    )
-                    if normalized_price_components:
-                        parsed["price_components"] = normalized_price_components
-
-        except Exception:
-            _LOGGER.exception("Error parsing data")
-            return {}
-
-        _LOGGER.debug("Parsed status %s", parsed)
-        return parsed
+        return parse_data(raw_data)
 
     async def update_manual_control(self, control_type: str, state: str) -> bool:
         """Update manual control state."""

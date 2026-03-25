@@ -1,11 +1,10 @@
 """Tests for tRPC error parsing."""
 
-from custom_components.proteus_api.proteus_api import ProteusAPI
+from custom_components.proteus_api.proteus_api import extract_trpc_error_messages
 
 
 def test_ignores_domain_error_fields() -> None:
     """Nested business data named error must not be treated as a tRPC error."""
-    api = ProteusAPI("inverter-id", "user@example.com", "secret")
     payload = [
         {
             "result": {
@@ -24,12 +23,11 @@ def test_ignores_domain_error_fields() -> None:
         }
     ]
 
-    assert api._extract_trpc_error_messages(payload) == []  # noqa: SLF001
+    assert extract_trpc_error_messages(payload) == []
 
 
 def test_reads_top_level_batch_errors() -> None:
     """Top-level tRPC batch errors should still be reported."""
-    api = ProteusAPI("inverter-id", "user@example.com", "secret")
     payload = [
         {"result": {"data": {"json": {"ok": True}}}},
         {
@@ -42,6 +40,4 @@ def test_reads_top_level_batch_errors() -> None:
         },
     ]
 
-    assert api._extract_trpc_error_messages(payload) == [  # noqa: SLF001
-        "Not found (code: -32004)"
-    ]
+    assert extract_trpc_error_messages(payload) == ["Not found (code: -32004)"]
