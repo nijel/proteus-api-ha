@@ -217,6 +217,16 @@ class ProteusAPI:
             self._format_trpc_error(error) for error in self._iter_trpc_errors(payload)
         ]
 
+    def _get_trpc_result_json(self, payload: Any, index: int) -> Any | None:
+        """Return one JSON result from a batched tRPC payload."""
+        if not isinstance(payload, list) or len(payload) <= index:
+            return None
+
+        try:
+            return payload[index]["result"]["data"]["json"]
+        except (KeyError, TypeError):
+            return None
+
     def _is_successful_trpc_response(
         self,
         response: aiohttp.ClientResponse,
@@ -346,72 +356,105 @@ class ProteusAPI:
                 params=params,
                 headers=self.get_headers(),
             ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    return self._parse_data(data)
-                await self._log_error(response)
+                response_text = await response.text()
+                payload = self._parse_response_body(response_text)
+
+                if response.status not in {200, 207}:
+                    _LOGGER.error(
+                        "API %s request %s failed with status %s (%s)",
+                        response.method,
+                        response.url,
+                        response.status,
+                        payload if payload is not None else response_text,
+                    )
+                    return None
+
+                if payload is None:
+                    _LOGGER.error(
+                        "API %s request %s returned an unparsable response",
+                        response.method,
+                        response.url,
+                    )
+                    return None
+
+                error_messages = self._extract_trpc_error_messages(payload)
+                if error_messages:
+                    _LOGGER.warning(
+                        "API %s request %s returned partial tRPC errors: %s",
+                        response.method,
+                        response.url,
+                        "; ".join(error_messages),
+                    )
+
+                data = self._parse_data(payload)
+                if data:
+                    return data
+
+                _LOGGER.error(
+                    "API %s request %s did not contain any usable data",
+                    response.method,
+                    response.url,
+                )
                 return None
 
         except Exception:
             _LOGGER.exception("Error fetching data")
             return None
 
-    def _parse_data(self, raw_data: dict[str, Any]) -> dict[str, Any]:
+    def _parse_data(self, raw_data: Any) -> dict[str, Any]:
         """Parse raw API data into structured format."""
-        if len(raw_data) != 5:
+        if not isinstance(raw_data, list) or len(raw_data) != 5:
             _LOGGER.error("Missing data: %s", raw_data)
             return {}
+
+        parsed = {}
+
         try:
-            # _LOGGER.debug("Parsed data: %s", raw_data)
-            parsed = {}
+            detail = self._get_trpc_result_json(raw_data, 0)
+            if isinstance(detail, dict):
+                parsed["flexibility_state"] = detail["household"]["flexibilityState"]
+                parsed["control_mode"] = detail["controlMode"]
+                parsed["control_enabled"] = detail["controlEnabled"]
 
-            # Basic info
-            detail = raw_data[0]["result"]["data"]["json"]
-            parsed["flexibility_state"] = detail["household"]["flexibilityState"]
-            parsed["control_mode"] = detail["controlMode"]
-            parsed["control_enabled"] = detail["controlEnabled"]
+            rewards = self._get_trpc_result_json(raw_data, 1)
+            if isinstance(rewards, dict):
+                parsed["flexibility_today"] = round(rewards["todayWithVat"], 2)
+                parsed["flexibility_month"] = round(rewards["monthToDateWithVat"], 2)
+                parsed["flexibility_total"] = round(rewards["totalWithVat"], 2)
 
-            # Flexibility rewards
-            rewards = raw_data[1]["result"]["data"]["json"]
-            parsed["flexibility_today"] = round(rewards["todayWithVat"], 2)
-            parsed["flexibility_month"] = round(rewards["monthToDateWithVat"], 2)
-            parsed["flexibility_total"] = round(rewards["totalWithVat"], 2)
+            controls = self._get_trpc_result_json(raw_data, 2)
+            if isinstance(controls, dict):
+                manual_controls = controls["manualControls"]
+                parsed["manual_controls"] = {}
+                for control in manual_controls:
+                    parsed["manual_controls"][control["type"]] = (
+                        control["state"] == "ENABLED"
+                    )
 
-            # Manual controls
-            controls = raw_data[2]["result"]["data"]["json"]
-            manual_controls = controls["manualControls"]
-            parsed["manual_controls"] = {}
-            for control in manual_controls:
-                parsed["manual_controls"][control["type"]] = (
-                    control["state"] == "ENABLED"
-                )
+                parsed["flexibility_capabilities"] = controls[
+                    "flexibilityCapabilitiesEnabled"
+                ]
+                enabled_capabilities = set(parsed["flexibility_capabilities"])
+                all_capabilities = set(FLEXIBILITY_CAPABILITIES)
+                if not enabled_capabilities:
+                    parsed["flexibility_mode"] = "NONE"
+                elif enabled_capabilities == all_capabilities:
+                    parsed["flexibility_mode"] = "FULL"
+                else:
+                    parsed["flexibility_mode"] = "PARTIAL"
 
-            parsed["flexibility_capabilities"] = controls[
-                "flexibilityCapabilitiesEnabled"
-            ]
-            enabled_capabilities = set(parsed["flexibility_capabilities"])
-            all_capabilities = set(FLEXIBILITY_CAPABILITIES)
-            if not enabled_capabilities:
-                parsed["flexibility_mode"] = "NONE"
-            elif enabled_capabilities == all_capabilities:
-                parsed["flexibility_mode"] = "FULL"
-            else:
-                parsed["flexibility_mode"] = "PARTIAL"
-
-            # Current command
-            command_data = raw_data[3]["result"]["data"]["json"]
-            if command_data.get("command"):
+            command_data = self._get_trpc_result_json(raw_data, 3)
+            if isinstance(command_data, dict) and command_data.get("command"):
                 parsed["current_command"] = command_data["command"]["type"]
                 parsed["command_end"] = datetime.fromisoformat(
                     command_data["command"]["endAt"]
                 )
-            else:
+            elif command_data is not None:
                 parsed["current_command"] = COMMAND_NONE
                 parsed["command_end"] = None
 
-            # Current step metadata
-            current_step = raw_data[4]["result"]["data"]["json"]
-            if current_step is not None:
+            current_step = self._get_trpc_result_json(raw_data, 4)
+            if isinstance(current_step, dict):
                 metadata = current_step["metadata"]
                 parsed["flexalgo_battery"] = metadata.get("flexalgoBattery")
                 parsed["flexalgo_battery_fallback"] = metadata.get(

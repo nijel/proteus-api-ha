@@ -185,10 +185,21 @@ class ProteusManualControlSwitch(ProteusOptimisticSwitch):
             and self.coordinator.data.get("control_mode") == "MANUAL"
         )
 
-    def _get_backend_state(self) -> bool:
+    @property
+    def is_on(self) -> bool | None:
+        """Return true if the switch is on."""
+        if self._optimistic_state is not None:
+            return self._optimistic_state
+        if self.coordinator.data is None:
+            return None
+        return self._get_backend_state()
+
+    def _get_backend_state(self) -> bool | None:
         """Return the latest backend state for this control."""
-        manual_controls = self.coordinator.data.get("manual_controls", {})
-        return manual_controls.get(self._control_type, False)
+        manual_controls = self.coordinator.data.get("manual_controls")
+        if manual_controls is None:
+            return None
+        return manual_controls.get(self._control_type)
 
     async def _set_manual_control(self, enabled: bool) -> None:
         """Apply a manual control change with optimistic UI state."""
@@ -289,6 +300,16 @@ class ProteusFlexibilityModeSwitch(ProteusOptimisticSwitch):
         self._attr_name = "Proteus obchodování flexibility"
         self._attr_unique_id = self._get_unique_id("proteus_switch_flexibility_mode")
         self._attr_icon = "mdi:robot"
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return true if the switch is on (automatic mode)."""
+        if self.coordinator.data is None:
+            return None
+        capabilities = self.coordinator.data.get("flexibility_capabilities")
+        if capabilities is None:
+            return None
+        return capabilities != []
 
     def _get_backend_state(self) -> bool:
         """Return the latest backend state for this control."""
