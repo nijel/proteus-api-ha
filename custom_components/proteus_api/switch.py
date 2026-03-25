@@ -171,15 +171,6 @@ class ProteusManualControlSwitch(ProteusOptimisticSwitch):
             and self.coordinator.data.get("control_mode") == "MANUAL"
         )
 
-    @property
-    def is_on(self) -> bool | None:
-        """Return true if the switch is on."""
-        if self._optimistic_state is not None:
-            return self._optimistic_state
-        if self.coordinator.data is None:
-            return None
-        return self._get_backend_state()
-
     def _get_backend_state(self) -> bool | None:
         """Return the latest backend state for this control."""
         manual_controls = self.coordinator.data.get("manual_controls")

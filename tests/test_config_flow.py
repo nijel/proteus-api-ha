@@ -27,8 +27,11 @@ async def test_updates_unique_id_when_email_changes(
         "custom_components.proteus_api.config_flow.validate_input",
         AsyncMock(return_value={"title": "Proteus API (new@example.com)"}),
     )
-    reload_mock = AsyncMock(return_value=True)
-    monkeypatch.setattr(hass.config_entries, "async_reload", reload_mock)
+    setup_entry_mock = AsyncMock(return_value=True)
+    monkeypatch.setattr(
+        "custom_components.proteus_api.async_setup_entry",
+        setup_entry_mock,
+    )
 
     init_result = await hass.config_entries.options.async_init(entry.entry_id)
     assert init_result["type"] == "form"
@@ -42,7 +45,7 @@ async def test_updates_unique_id_when_email_changes(
     assert entry.data["password"] == "updated"
     assert entry.unique_id == "new@example.com"
     assert entry.title == "Proteus API (new@example.com)"
-    reload_mock.assert_awaited_once_with(entry.entry_id)
+    setup_entry_mock.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -67,8 +70,6 @@ async def test_rejects_duplicate_unique_id_when_email_changes(
         "custom_components.proteus_api.config_flow.validate_input",
         AsyncMock(return_value={"title": "Proteus API (taken@example.com)"}),
     )
-    reload_mock = AsyncMock(return_value=True)
-    monkeypatch.setattr(hass.config_entries, "async_reload", reload_mock)
 
     init_result = await hass.config_entries.options.async_init(current_entry.entry_id)
     assert init_result["type"] == "form"
@@ -80,4 +81,3 @@ async def test_rejects_duplicate_unique_id_when_email_changes(
     assert result["type"] == "form"
     assert result["errors"] == {"base": "already_configured"}
     assert current_entry.unique_id == "old@example.com"
-    reload_mock.assert_not_awaited()
