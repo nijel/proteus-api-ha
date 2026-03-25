@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 import logging
 
 from homeassistant.components.sensor import (
@@ -306,10 +306,10 @@ class ProteusCommandSensor(ProteusBaseSensor):
             # Convert to UTC for consistent comparison
             if command_end.tzinfo is None:
                 # If naive, assume it's UTC
-                command_end_utc = command_end.replace(tzinfo=timezone.utc)
+                command_end_utc = command_end.replace(tzinfo=UTC)
             else:
                 # Convert timezone-aware datetime to UTC
-                command_end_utc = command_end.astimezone(timezone.utc)
+                command_end_utc = command_end.astimezone(UTC)
 
             # Track the end time for race condition prevention
             self._local_end_time = command_end_utc
