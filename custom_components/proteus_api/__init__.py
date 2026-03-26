@@ -7,8 +7,9 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import DOMAIN, UPDATE_INTERVAL, normalize_email
@@ -17,6 +18,41 @@ from .proteus_api import AuthenticationError, ProteusAPI
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.SWITCH]
+
+
+@callback
+def _async_remove_stale_devices(
+    hass: HomeAssistant, entry: ConfigEntry, current_inverter_ids: set[str]
+) -> None:
+    """Remove orphaned Proteus devices left behind by older installs."""
+    device_registry = dr.async_get(hass)
+    entity_registry = er.async_get(hass)
+
+    for device_entry in dr.async_entries_for_config_entry(
+        device_registry, entry.entry_id
+    ):
+        proteus_ids = {
+            identifier
+            for domain, identifier in device_entry.identifiers
+            if domain == DOMAIN
+        }
+        if not proteus_ids:
+            continue
+        if proteus_ids & current_inverter_ids:
+            continue
+        if er.async_entries_for_device(
+            entity_registry,
+            device_entry.id,
+            include_disabled_entities=True,
+        ):
+            continue
+
+        _LOGGER.info(
+            "Removing stale device entry %s for missing inverter identifiers %s",
+            device_entry.id,
+            sorted(proteus_ids),
+        )
+        device_registry.async_remove_device(device_entry.id)
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -116,6 +152,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         "inverters": inverter_data,
     }
+
+    _async_remove_stale_devices(hass, entry, set(inverter_data))
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
