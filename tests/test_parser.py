@@ -99,7 +99,9 @@ def test_parses_distribution_prices() -> None:
     """Distribution prices should be converted to per-kWh sensors."""
     parsed = parse_data(_build_payload(["UP_POWER"]))
 
+    assert parsed["price_consumption_mwh"] == 8417.258278
     assert parsed["price_consumption_kwh"] == 8.4173
+    assert parsed["price_production_mwh"] == 3711.4218
     assert parsed["price_production_kwh"] == 3.7114
     assert parsed["distribution_tariff_type"] == "HT"
     assert parsed["price_components"] == {
