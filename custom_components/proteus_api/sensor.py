@@ -530,6 +530,7 @@ class ProteusConsumptionPriceSensor(ProteusBaseSensor):
     _attr_translation_key = "consumption_price"
     _attr_native_unit_of_measurement = "CZK/kWh"
     _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 2
     _attr_icon = "mdi:cash-plus"
 
     def __init__(self, coordinator, config_entry, inverter_id, inverter):
@@ -550,7 +551,11 @@ class ProteusConsumptionPriceSensor(ProteusBaseSensor):
         if self.coordinator.data is None:
             return None
 
-        attributes = self.coordinator.data.get("price_components")
+        attributes = dict(self.coordinator.data.get("price_components") or {})
+        price_consumption_mwh = self.coordinator.data.get("price_consumption_mwh")
+        if price_consumption_mwh is not None:
+            attributes["price_consumption_mwh"] = price_consumption_mwh
+
         if not attributes:
             return None
 
@@ -563,6 +568,7 @@ class ProteusProductionPriceSensor(ProteusBaseSensor):
     _attr_translation_key = "production_price"
     _attr_native_unit_of_measurement = "CZK/kWh"
     _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 2
     _attr_icon = "mdi:cash-minus"
 
     def __init__(self, coordinator, config_entry, inverter_id, inverter):
@@ -576,6 +582,22 @@ class ProteusProductionPriceSensor(ProteusBaseSensor):
         if self.coordinator.data is None:
             return None
         return self.coordinator.data.get("price_production_kwh")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, float | str] | None:
+        """Return the current production price details."""
+        if self.coordinator.data is None:
+            return None
+
+        attributes = {}
+        price_production_mwh = self.coordinator.data.get("price_production_mwh")
+        if price_production_mwh is not None:
+            attributes["price_production_mwh"] = price_production_mwh
+
+        if not attributes:
+            return None
+
+        return attributes
 
 
 class ProteusDistributionTariffTypeSensor(ProteusBaseSensor):

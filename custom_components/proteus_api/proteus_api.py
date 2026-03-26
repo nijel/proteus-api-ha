@@ -191,10 +191,12 @@ def parse_data(raw_data: Any) -> dict[str, Any]:
         if isinstance(prices, dict):
             consumption_price = prices.get("priceConsumptionMwh")
             if isinstance(consumption_price, int | float):
+                parsed["price_consumption_mwh"] = consumption_price
                 parsed["price_consumption_kwh"] = round(consumption_price / 1000, 4)
 
             production_price = prices.get("priceProductionMwh")
             if isinstance(production_price, int | float):
+                parsed["price_production_mwh"] = production_price
                 parsed["price_production_kwh"] = round(production_price / 1000, 4)
 
             price_components = prices.get("priceComponents")
