@@ -6,7 +6,10 @@ from datetime import datetime
 import json
 from json import JSONDecodeError
 import logging
-from typing import Any, TypedDict, cast
+from math import ceil
+import re
+from time import monotonic
+from typing import Any, ClassVar, TypedDict, cast
 
 import aiohttp
 from aiohttp.client_exceptions import ClientConnectionError
@@ -29,6 +32,14 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+TRPC_RATE_LIMIT_CODE = -32029
+TRPC_RATE_LIMIT_HTTP_STATUS = 429
+TRPC_RATE_LIMIT_RETRY_RE = re.compile(
+    r"try again in (?P<seconds>\d+) seconds?", re.IGNORECASE
+)
+RATE_LIMIT_WARNING_INTERVAL = 300
+STATUS_ENDPOINTS = tuple(API_ENDPOINT.split(","))
+
 
 class AuthenticationError(Exception):
     """Exception raised for authentication failures."""
@@ -44,15 +55,29 @@ class InverterDict(TypedDict):
     vendor: str
 
 
+def get_top_level_trpc_error(payload: Any) -> dict[str, Any] | None:
+    """Return a top-level tRPC error object from a response item."""
+    if not isinstance(payload, dict):
+        return None
+
+    if "error" not in payload or (
+        len(payload) != 1 and "result" not in payload and "meta" not in payload
+    ):
+        return None
+
+    error = payload.get("error")
+    if isinstance(error, dict):
+        return error
+
+    return None
+
+
 def iter_trpc_errors(payload: Any):
     """Yield top-level tRPC error objects from a response payload."""
     if isinstance(payload, dict):
-        if "error" in payload and (
-            len(payload) == 1 or "result" in payload or "meta" in payload
-        ):
-            error = payload.get("error")
-            if isinstance(error, dict):
-                yield error
+        error = get_top_level_trpc_error(payload)
+        if error is not None:
+            yield error
         return
 
     if isinstance(payload, list):
@@ -61,33 +86,177 @@ def iter_trpc_errors(payload: Any):
                 yield from iter_trpc_errors(item)
 
 
-def format_trpc_error(error: dict[str, Any]) -> str:
+def iter_trpc_errors_with_endpoints(payload: Any, endpoints: tuple[str, ...] = ()):
+    """Yield tRPC error objects with their batched endpoint name when known."""
+    if isinstance(payload, dict):
+        error = get_top_level_trpc_error(payload)
+        if error is not None:
+            yield error, get_trpc_error_path(error)
+        return
+
+    if not isinstance(payload, list):
+        return
+
+    for index, item in enumerate(payload):
+        endpoint = endpoints[index] if index < len(endpoints) else None
+        if isinstance(item, dict):
+            error = get_top_level_trpc_error(item)
+            if error is not None:
+                yield error, get_trpc_error_path(error) or endpoint
+        elif isinstance(item, list):
+            yield from iter_trpc_errors_with_endpoints(item)
+
+
+def format_trpc_error(error: dict[str, Any], endpoint: str | None = None) -> str:
     """Format a tRPC error payload for logging."""
-    error_json = error.get("json")
-    message = None
-    code = None
-
-    if isinstance(error_json, dict):
-        message = error_json.get("message")
-        code = error_json.get("code")
-
-    if message is None:
-        message = error.get("message")
-    if code is None:
-        code = error.get("code")
+    message = get_trpc_error_message(error)
+    code = get_trpc_error_code(error)
 
     if message and code is not None:
-        return f"{message} (code: {code})"
-    if message:
-        return str(message)
-    if code is not None:
-        return f"code: {code}"
-    return str(error)
+        formatted = f"{message} (code: {code})"
+    elif message:
+        formatted = str(message)
+    elif code is not None:
+        formatted = f"code: {code}"
+    else:
+        formatted = str(error)
+
+    path = get_trpc_error_path(error) or endpoint
+    if path is None:
+        return formatted
+    return f"{path}: {formatted}"
 
 
-def extract_trpc_error_messages(payload: Any) -> list[str]:
+def extract_trpc_error_messages(
+    payload: Any, endpoints: tuple[str, ...] = ()
+) -> list[str]:
     """Extract all tRPC error messages from a response payload."""
+    if endpoints:
+        return [
+            format_trpc_error(error, endpoint)
+            for error, endpoint in iter_trpc_errors_with_endpoints(payload, endpoints)
+        ]
+
     return [format_trpc_error(error) for error in iter_trpc_errors(payload)]
+
+
+def get_trpc_error_message(error: dict[str, Any]) -> str | None:
+    """Return a tRPC error message if present."""
+    error_json = error.get("json")
+    if isinstance(error_json, dict):
+        message = error_json.get("message")
+        if message is not None:
+            return str(message)
+
+    message = error.get("message")
+    if message is not None:
+        return str(message)
+
+    return None
+
+
+def get_trpc_error_code(error: dict[str, Any]) -> Any | None:
+    """Return a tRPC error code if present."""
+    error_json = error.get("json")
+    if isinstance(error_json, dict) and error_json.get("code") is not None:
+        return error_json.get("code")
+    return error.get("code")
+
+
+def _coerce_int(value: Any) -> int | None:
+    """Convert an API numeric value to int when possible."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def get_trpc_error_data(error: dict[str, Any]) -> dict[str, Any]:
+    """Return structured tRPC error data if present."""
+    error_json = error.get("json")
+    if isinstance(error_json, dict):
+        data = error_json.get("data")
+        if isinstance(data, dict):
+            return data
+
+    data = error.get("data")
+    if isinstance(data, dict):
+        return data
+
+    return {}
+
+
+def get_trpc_error_path(error: dict[str, Any]) -> str | None:
+    """Return the tRPC procedure path for an error if the API provided it."""
+    error_data = get_trpc_error_data(error)
+    path = error_data.get("path")
+    if path is not None:
+        return str(path)
+
+    path = error.get("path")
+    if path is not None:
+        return str(path)
+
+    return None
+
+
+def is_trpc_rate_limit_error(error: dict[str, Any]) -> bool:
+    """Return whether a tRPC error represents API rate limiting."""
+    code = _coerce_int(get_trpc_error_code(error))
+    if code == TRPC_RATE_LIMIT_CODE:
+        return True
+
+    error_data = get_trpc_error_data(error)
+    http_status = _coerce_int(error_data.get("httpStatus"))
+    if http_status == TRPC_RATE_LIMIT_HTTP_STATUS:
+        return True
+
+    if error_data.get("code") == "TOO_MANY_REQUESTS":
+        return True
+
+    message = get_trpc_error_message(error)
+    return message is not None and "rate limit" in message.casefold()
+
+
+def get_trpc_rate_limit_retry_after(error: dict[str, Any]) -> int | None:
+    """Return the retry delay from a tRPC rate-limit error if present."""
+    error_data = get_trpc_error_data(error)
+    for key in ("retryAfter", "retryAfterSeconds"):
+        retry_after = _coerce_int(error_data.get(key))
+        if retry_after is not None:
+            return max(0, retry_after)
+
+    message = get_trpc_error_message(error)
+    if message is None:
+        return None
+
+    match = TRPC_RATE_LIMIT_RETRY_RE.search(message)
+    if match is None:
+        return None
+
+    return max(0, int(match.group("seconds")))
+
+
+def extract_trpc_rate_limit_retry_after(payload: Any) -> int | None:
+    """Extract the longest retry delay from tRPC rate-limit errors."""
+    retry_after_values = []
+    has_rate_limit_error = False
+    for error in iter_trpc_errors(payload):
+        if not is_trpc_rate_limit_error(error):
+            continue
+
+        has_rate_limit_error = True
+        retry_after = get_trpc_rate_limit_retry_after(error)
+        if retry_after is not None:
+            retry_after_values.append(retry_after)
+
+    if retry_after_values:
+        return max(retry_after_values)
+
+    if has_rate_limit_error:
+        return UPDATE_INTERVAL
+
+    return None
 
 
 def get_trpc_result_json(payload: Any, index: int) -> Any | None:
@@ -225,6 +394,9 @@ def parse_data(raw_data: Any) -> dict[str, Any]:
 class ProteusAPI:
     """Proteus API client."""
 
+    _rate_limited_until_by_account: ClassVar[dict[tuple[str, str], float]] = {}
+    _next_rate_limit_warning_by_account: ClassVar[dict[tuple[str, str], float]] = {}
+
     def __init__(
         self,
         inverter_id: str,
@@ -238,6 +410,8 @@ class ProteusAPI:
         self.password = password
         self.tenant = tenant
         self._session = None
+        self._last_data: dict[str, Any] | None = None
+        self._rate_limit_key = (self.tenant, self.email.strip().casefold())
 
     def get_headers(self, *, for_post: bool = False) -> dict[str, str]:
         """Build HTTP headers for the next request.
@@ -356,13 +530,21 @@ class ProteusAPI:
         """Yield top-level tRPC error objects from a response payload."""
         yield from iter_trpc_errors(payload)
 
-    def _format_trpc_error(self, error: dict[str, Any]) -> str:
+    def _format_trpc_error(
+        self, error: dict[str, Any], endpoint: str | None = None
+    ) -> str:
         """Format a tRPC error payload for logging."""
-        return format_trpc_error(error)
+        return format_trpc_error(error, endpoint)
 
-    def _extract_trpc_error_messages(self, payload: Any) -> list[str]:
+    def _extract_trpc_error_messages(
+        self, payload: Any, endpoints: tuple[str, ...] = ()
+    ) -> list[str]:
         """Extract all tRPC error messages from a response payload."""
-        return extract_trpc_error_messages(payload)
+        return extract_trpc_error_messages(payload, endpoints)
+
+    def _extract_trpc_rate_limit_retry_after(self, payload: Any) -> int | None:
+        """Extract the retry delay from tRPC rate-limit errors."""
+        return extract_trpc_rate_limit_retry_after(payload)
 
     def _get_trpc_result_json(self, payload: Any, index: int) -> Any | None:
         """Return one JSON result from a batched tRPC payload."""
@@ -429,6 +611,51 @@ class ProteusAPI:
                 data,
             )
 
+    def _get_rate_limit_remaining(self) -> int:
+        """Return seconds until the local rate-limit cooldown expires."""
+        rate_limited_until = self._rate_limited_until_by_account.get(
+            self._rate_limit_key, 0.0
+        )
+        remaining = rate_limited_until - monotonic()
+        if remaining <= 0:
+            return 0
+        return ceil(remaining)
+
+    def _set_rate_limit_cooldown(self, retry_after: int) -> None:
+        """Remember the server-requested rate-limit cooldown."""
+        self._rate_limited_until_by_account[self._rate_limit_key] = max(
+            self._rate_limited_until_by_account.get(self._rate_limit_key, 0.0),
+            monotonic() + retry_after,
+        )
+
+    def _log_rate_limit(self, retry_after: int, error_messages: list[str]) -> None:
+        """Log rate limiting without the long batched request URL."""
+        now = monotonic()
+        log_level = logging.DEBUG
+        extra = ""
+        next_warning = self._next_rate_limit_warning_by_account.get(
+            self._rate_limit_key, 0.0
+        )
+        if now >= next_warning:
+            log_level = logging.WARNING
+            self._next_rate_limit_warning_by_account[self._rate_limit_key] = (
+                now + RATE_LIMIT_WARNING_INTERVAL
+            )
+            extra = (
+                "; repeated rate-limit messages will be logged at debug "
+                f"for {RATE_LIMIT_WARNING_INTERVAL} seconds"
+            )
+
+        _LOGGER.log(
+            log_level,
+            "Proteus API rate-limited status refresh for inverter %s; "
+            "keeping previous values when available and retrying after %s seconds: %s%s",
+            self.inverter_id,
+            retry_after,
+            "; ".join(error_messages),
+            extra,
+        )
+
     async def fetch_inverters(self) -> list[InverterDict]:
         """Fetch list of inverters available in the API."""
         client = await self._get_client()
@@ -482,6 +709,16 @@ class ProteusAPI:
         """Fetch data from Proteus API."""
 
         try:
+            rate_limit_remaining = self._get_rate_limit_remaining()
+            if rate_limit_remaining:
+                _LOGGER.debug(
+                    "Skipping Proteus API status refresh for inverter %s; "
+                    "server rate-limit cooldown has %s seconds remaining",
+                    self.inverter_id,
+                    rate_limit_remaining,
+                )
+                return self._last_data
+
             client = await self._get_client()
 
             params = {
@@ -506,6 +743,17 @@ class ProteusAPI:
             ) as response:
                 response_text = await response.text()
                 payload = self._parse_response_body(response_text)
+                retry_after = self._extract_trpc_rate_limit_retry_after(payload)
+
+                if response.status == TRPC_RATE_LIMIT_HTTP_STATUS:
+                    retry_after = retry_after or UPDATE_INTERVAL
+                    self._set_rate_limit_cooldown(retry_after)
+                    self._log_rate_limit(
+                        retry_after,
+                        self._extract_trpc_error_messages(payload, STATUS_ENDPOINTS)
+                        or [f"HTTP {response.status}"],
+                    )
+                    return self._last_data
 
                 if response.status not in {200, 207}:
                     _LOGGER.error(
@@ -525,18 +773,39 @@ class ProteusAPI:
                     )
                     return None
 
-                error_messages = self._extract_trpc_error_messages(payload)
-                if error_messages:
+                rate_limit_error_messages = []
+                other_error_messages = []
+                for error, endpoint in iter_trpc_errors_with_endpoints(
+                    payload, STATUS_ENDPOINTS
+                ):
+                    message = self._format_trpc_error(error, endpoint)
+                    if is_trpc_rate_limit_error(error):
+                        rate_limit_error_messages.append(message)
+                    else:
+                        other_error_messages.append(message)
+
+                if rate_limit_error_messages:
+                    retry_after = retry_after or UPDATE_INTERVAL
+                    self._set_rate_limit_cooldown(retry_after)
+                    self._log_rate_limit(retry_after, rate_limit_error_messages)
+
+                if other_error_messages:
                     _LOGGER.warning(
-                        "API %s request %s returned partial tRPC errors: %s",
+                        "API %s request for inverter %s returned partial tRPC errors: %s",
                         response.method,
-                        response.url,
-                        "; ".join(error_messages),
+                        self.inverter_id,
+                        "; ".join(other_error_messages),
                     )
 
                 data = self._parse_data(payload)
                 if data:
+                    if rate_limit_error_messages and self._last_data is not None:
+                        data = {**self._last_data, **data}
+                    self._last_data = data
                     return data
+
+                if rate_limit_error_messages:
+                    return self._last_data
 
                 _LOGGER.error(
                     "API %s request %s did not contain any usable data",
