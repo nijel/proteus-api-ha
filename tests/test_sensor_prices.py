@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
@@ -35,6 +36,20 @@ async def test_price_sensors_are_created_with_expected_values(hass) -> None:
                                 "price_consumption_mwh": 8417.258278,
                                 "price_production_kwh": 3.7114,
                                 "price_production_mwh": 3711.4218,
+                                "current_command": "UP_POWER",
+                                "command_id": "command-1",
+                                "command_source": "API",
+                                "command_start": datetime(
+                                    2026, 4, 21, 14, 48, 6, 576000, tzinfo=UTC
+                                ),
+                                "command_effective_end": datetime(
+                                    2026, 4, 21, 14, 59, 29, tzinfo=UTC
+                                ),
+                                "command_is_testing": False,
+                                "flexibility_price_kwh": 9.793,
+                                "flexibility_price_mwh": 9793.001261,
+                                "flexibility_price_up_kwh": 9.793001261,
+                                "flexibility_price_down_kwh": None,
                                 "distribution_tariff_type": "HT",
                                 "price_components": {
                                     "price_mwh": 4161.4218,
@@ -86,6 +101,27 @@ async def test_price_sensors_are_created_with_expected_values(hass) -> None:
     assert production.suggested_display_precision == 2
     assert production.extra_state_attributes == {
         "price_production_mwh": 3711.4218,
+    }
+
+    flexibility = by_unique_id["proteus_flexibility_price_inv-1"]
+    assert flexibility.native_value == 9.793
+    assert flexibility.suggested_display_precision == 2
+    assert flexibility.extra_state_attributes == {
+        "flexibility_price_mwh": 9793.001261,
+        "price_up_kwh": 9.793001261,
+        "price_down_kwh": None,
+    }
+
+    command = by_unique_id["proteus_command_inv-1"]
+    assert command.native_value == "UP_POWER"
+    assert command.extra_state_attributes == {
+        "command_id": "command-1",
+        "command_source": "API",
+        "command_start": datetime(2026, 4, 21, 14, 48, 6, 576000, tzinfo=UTC),
+        "command_effective_end": datetime(2026, 4, 21, 14, 59, 29, tzinfo=UTC),
+        "command_is_testing": False,
+        "flexibility_price_kwh": 9.793,
+        "price_up_kwh": 9.793001261,
     }
 
     tariff = by_unique_id["proteus_distribution_tariff_type_inv-1"]
