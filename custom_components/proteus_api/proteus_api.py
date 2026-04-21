@@ -274,6 +274,17 @@ def get_trpc_result_json(payload: Any, index: int) -> Any | None:
         return None
 
 
+def parse_optional_datetime(value: Any) -> datetime | None:
+    """Parse an optional ISO datetime value."""
+    if not isinstance(value, str):
+        return None
+
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
 def normalize_price_components(
     price_components: Any, *, price_mwh: Any
 ) -> dict[str, Any]:
@@ -326,6 +337,49 @@ def parse_price_payload(prices: Any) -> dict[str, Any]:
             parsed["price_components"] = normalized_price_components
 
     return parsed
+
+
+def parse_flexibility_price_payload(price: Any) -> dict[str, Any]:
+    """Parse a current flexibility command price."""
+    parsed: dict[str, Any] = {}
+    if isinstance(price, bool):
+        return parsed
+
+    if isinstance(price, int | float):
+        parsed["flexibility_price_kwh"] = round(price, 4)
+        parsed["flexibility_price_mwh"] = price * 1000
+        return parsed
+
+    if isinstance(price, dict):
+        price_up = price.get("priceUp")
+        price_down = price.get("priceDown")
+        if isinstance(price_up, int | float) and not isinstance(price_up, bool):
+            parsed["flexibility_price_up_kwh"] = price_up
+        elif "priceUp" in price:
+            parsed["flexibility_price_up_kwh"] = None
+
+        if isinstance(price_down, int | float) and not isinstance(price_down, bool):
+            parsed["flexibility_price_down_kwh"] = price_down
+        elif "priceDown" in price:
+            parsed["flexibility_price_down_kwh"] = None
+
+    return parsed
+
+
+def select_flexibility_price(
+    flexibility_price: dict[str, Any], command_type: str
+) -> None:
+    """Select the current flexibility price for a command direction."""
+    if command_type.startswith("UP_"):
+        selected_price = flexibility_price.get("flexibility_price_up_kwh")
+    elif command_type.startswith("DOWN_"):
+        selected_price = flexibility_price.get("flexibility_price_down_kwh")
+    else:
+        selected_price = None
+
+    if isinstance(selected_price, int | float) and not isinstance(selected_price, bool):
+        flexibility_price["flexibility_price_kwh"] = round(selected_price, 4)
+        flexibility_price["flexibility_price_mwh"] = selected_price * 1000
 
 
 def parse_price_data(raw_data: Any) -> dict[str, Any]:
@@ -383,10 +437,36 @@ def parse_data(raw_data: Any) -> dict[str, Any]:
 
         command_data = get_trpc_result_json(raw_data, 3)
         if isinstance(command_data, dict) and command_data.get("command"):
-            parsed["current_command"] = command_data["command"]["type"]
-            parsed["command_end"] = datetime.fromisoformat(
-                command_data["command"]["endAt"]
+            command = command_data["command"]
+            command_type = command["type"]
+            parsed["current_command"] = command_type
+            parsed["command_end"] = datetime.fromisoformat(command["endAt"])
+            command_start = parse_optional_datetime(command.get("startAt"))
+            if command_start is not None:
+                parsed["command_start"] = command_start
+            command_effective_end = parse_optional_datetime(
+                command.get("effectiveEndAt")
             )
+            if command_effective_end is not None:
+                parsed["command_effective_end"] = command_effective_end
+            if command.get("id") is not None:
+                parsed["command_id"] = command.get("id")
+            if command.get("source") is not None:
+                parsed["command_source"] = command.get("source")
+            if command.get("isTesting") is not None:
+                parsed["command_is_testing"] = command.get("isTesting")
+            flexibility_price = parse_flexibility_price_payload(
+                command_data.get("price")
+            )
+            select_flexibility_price(flexibility_price, command_type)
+            parsed.update(flexibility_price)
+            if "flexibility_price_kwh" not in flexibility_price:
+                _LOGGER.warning(
+                    "Current flexibility command payload did not contain the expected "
+                    "price field for command type %s: %s",
+                    command_type,
+                    command_data,
+                )
         elif command_data is not None:
             parsed["current_command"] = COMMAND_NONE
             parsed["command_end"] = None

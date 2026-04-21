@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 import logging
+from typing import Any
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -56,6 +57,9 @@ async def async_setup_entry(
                     coordinator, config_entry, inverter_id, inverter
                 ),
                 ProteusCommandSensor(coordinator, config_entry, inverter_id, inverter),
+                ProteusFlexibilityPriceSensor(
+                    coordinator, config_entry, inverter_id, inverter
+                ),
                 ProteusCommandEndSensor(
                     coordinator, config_entry, inverter_id, inverter
                 ),
@@ -272,6 +276,33 @@ class ProteusCommandSensor(ProteusBaseSensor):
             return None
         return self.coordinator.data.get("current_command")
 
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Return the current flexibility command details."""
+        if self.coordinator.data is None:
+            return None
+
+        attributes = {}
+        attribute_keys = {
+            "command_id": "command_id",
+            "command_source": "command_source",
+            "command_start": "command_start",
+            "command_effective_end": "command_effective_end",
+            "command_is_testing": "command_is_testing",
+            "flexibility_price_kwh": "flexibility_price_kwh",
+            "price_up_kwh": "flexibility_price_up_kwh",
+            "price_down_kwh": "flexibility_price_down_kwh",
+        }
+        for attribute, key in attribute_keys.items():
+            value = self.coordinator.data.get(key)
+            if value is not None:
+                attributes[attribute] = value
+
+        if not attributes:
+            return None
+
+        return attributes
+
     async def async_added_to_hass(self) -> None:
         """Handle entity which will be added."""
         await super().async_added_to_hass()
@@ -305,6 +336,15 @@ class ProteusCommandSensor(ProteusBaseSensor):
                         updated_data = dict(data)
                         updated_data["current_command"] = COMMAND_NONE
                         updated_data["command_end"] = None
+                        updated_data["flexibility_price_mwh"] = None
+                        updated_data["flexibility_price_kwh"] = None
+                        updated_data["flexibility_price_up_kwh"] = None
+                        updated_data["flexibility_price_down_kwh"] = None
+                        updated_data["command_id"] = None
+                        updated_data["command_source"] = None
+                        updated_data["command_start"] = None
+                        updated_data["command_effective_end"] = None
+                        updated_data["command_is_testing"] = None
                         self.coordinator.async_set_updated_data(updated_data)
                     else:
                         # API now agrees the command is NONE, clear our tracking
@@ -372,6 +412,15 @@ class ProteusCommandSensor(ProteusBaseSensor):
             updated_data = dict(self.coordinator.data)
             updated_data["current_command"] = COMMAND_NONE
             updated_data["command_end"] = None
+            updated_data["flexibility_price_mwh"] = None
+            updated_data["flexibility_price_kwh"] = None
+            updated_data["flexibility_price_up_kwh"] = None
+            updated_data["flexibility_price_down_kwh"] = None
+            updated_data["command_id"] = None
+            updated_data["command_source"] = None
+            updated_data["command_start"] = None
+            updated_data["command_effective_end"] = None
+            updated_data["command_is_testing"] = None
             # Notify all listeners that the data has changed
             self.coordinator.async_set_updated_data(updated_data)
 
@@ -381,6 +430,49 @@ class ProteusCommandSensor(ProteusBaseSensor):
         _LOGGER.debug("Flexibility command end time reached, updating state to NONE")
         self._cancel_time_tracker = None
         self._update_state_to_none()
+
+
+class ProteusFlexibilityPriceSensor(ProteusBaseSensor):
+    """Current flexibility command price sensor."""
+
+    _attr_translation_key = "flexibility_price"
+    _attr_native_unit_of_measurement = "CZK/kWh"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 2
+    _attr_icon = "mdi:cash-fast"
+
+    def __init__(self, coordinator, config_entry, inverter_id, inverter):
+        """Initialize the sensor."""
+        super().__init__(coordinator, config_entry, inverter_id, inverter)
+        self._attr_unique_id = self._get_unique_id("proteus_flexibility_price")
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the current flexibility price."""
+        if self.coordinator.data is None:
+            return None
+        return self.coordinator.data.get("flexibility_price_kwh")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, float | None] | None:
+        """Return the current flexibility price details."""
+        if self.coordinator.data is None:
+            return None
+
+        attributes = {}
+        attribute_keys = {
+            "flexibility_price_mwh": "flexibility_price_mwh",
+            "price_up_kwh": "flexibility_price_up_kwh",
+            "price_down_kwh": "flexibility_price_down_kwh",
+        }
+        for attribute, key in attribute_keys.items():
+            if key in self.coordinator.data:
+                attributes[attribute] = self.coordinator.data.get(key)
+
+        if not attributes:
+            return None
+
+        return attributes
 
 
 class ProteusCommandEndSensor(ProteusBaseSensor):
