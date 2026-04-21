@@ -8,7 +8,7 @@ from json import JSONDecodeError
 import logging
 from math import ceil
 import re
-from time import monotonic
+from time import monotonic, time
 from typing import Any, ClassVar, TypedDict, cast
 
 import aiohttp
@@ -19,13 +19,18 @@ from .const import (
     API_BASE_URL,
     API_CONTROL_ENDPOINT,
     API_ENABLED_ENDPOINT,
-    API_ENDPOINT,
     API_FLEXIBILITY_ENDPOINT,
     API_LIST_ENDPOINT,
     API_LOGIN_ENDPOINT,
     API_MODE_ENDPOINT,
+    API_PRICE_ENDPOINT,
+    API_PRICE_ENDPOINTS,
+    API_STATUS_ENDPOINT,
+    API_STATUS_ENDPOINTS,
     COMMAND_NONE,
     FLEXIBILITY_CAPABILITIES,
+    PRICE_UPDATE_DELAY,
+    PRICE_UPDATE_INTERVAL,
     TID_DELTA_GREEN,
     UPDATE_INTERVAL,
 )
@@ -37,8 +42,7 @@ TRPC_RATE_LIMIT_HTTP_STATUS = 429
 TRPC_RATE_LIMIT_RETRY_RE = re.compile(
     r"try again in (?P<seconds>\d+) seconds?", re.IGNORECASE
 )
-RATE_LIMIT_WARNING_INTERVAL = 300
-STATUS_ENDPOINTS = tuple(API_ENDPOINT.split(","))
+RATE_LIMIT_ERROR_INTERVAL = 300
 
 
 class AuthenticationError(Exception):
@@ -292,6 +296,49 @@ def normalize_price_components(
     return {key: value for key, value in normalized.items() if value is not None}
 
 
+def parse_price_payload(prices: Any) -> dict[str, Any]:
+    """Parse distribution price payload fields."""
+    parsed: dict[str, Any] = {}
+    if not isinstance(prices, dict):
+        return parsed
+
+    consumption_price = prices.get("priceConsumptionMwh")
+    if isinstance(consumption_price, int | float):
+        parsed["price_consumption_mwh"] = consumption_price
+        parsed["price_consumption_kwh"] = round(consumption_price / 1000, 4)
+
+    production_price = prices.get("priceProductionMwh")
+    if isinstance(production_price, int | float):
+        parsed["price_production_mwh"] = production_price
+        parsed["price_production_kwh"] = round(production_price / 1000, 4)
+
+    price_components = prices.get("priceComponents")
+    if isinstance(price_components, dict):
+        distribution_tariff_type = price_components.get("distributionTariffType")
+        if distribution_tariff_type is not None:
+            parsed["distribution_tariff_type"] = distribution_tariff_type
+
+        normalized_price_components = normalize_price_components(
+            price_components,
+            price_mwh=prices.get("priceMwh"),
+        )
+        if normalized_price_components:
+            parsed["price_components"] = normalized_price_components
+
+    return parsed
+
+
+def parse_price_data(raw_data: Any) -> dict[str, Any]:
+    """Parse a standalone distribution price tRPC response."""
+    return parse_price_payload(get_trpc_result_json(raw_data, 0))
+
+
+def get_seconds_until_next_price_update(now: float) -> float:
+    """Return seconds until the next quarter-hour price refresh."""
+    next_boundary = (int(now // PRICE_UPDATE_INTERVAL) + 1) * PRICE_UPDATE_INTERVAL
+    return max(0, next_boundary - now + PRICE_UPDATE_DELAY)
+
+
 def parse_data(raw_data: Any) -> dict[str, Any]:
     """Parse raw API data into structured format."""
     if not isinstance(raw_data, list) or len(raw_data) < 5:
@@ -357,31 +404,7 @@ def parse_data(raw_data: Any) -> dict[str, Any]:
             parsed["predicted_consumption"] = metadata.get("predictedConsumption")
 
         prices = get_trpc_result_json(raw_data, 5)
-        if isinstance(prices, dict):
-            consumption_price = prices.get("priceConsumptionMwh")
-            if isinstance(consumption_price, int | float):
-                parsed["price_consumption_mwh"] = consumption_price
-                parsed["price_consumption_kwh"] = round(consumption_price / 1000, 4)
-
-            production_price = prices.get("priceProductionMwh")
-            if isinstance(production_price, int | float):
-                parsed["price_production_mwh"] = production_price
-                parsed["price_production_kwh"] = round(production_price / 1000, 4)
-
-            price_components = prices.get("priceComponents")
-            if isinstance(price_components, dict):
-                distribution_tariff_type = price_components.get(
-                    "distributionTariffType"
-                )
-                if distribution_tariff_type is not None:
-                    parsed["distribution_tariff_type"] = distribution_tariff_type
-
-                normalized_price_components = normalize_price_components(
-                    price_components,
-                    price_mwh=prices.get("priceMwh"),
-                )
-                if normalized_price_components:
-                    parsed["price_components"] = normalized_price_components
+        parsed.update(parse_price_payload(prices))
 
     except Exception:
         _LOGGER.exception("Error parsing data")
@@ -394,8 +417,8 @@ def parse_data(raw_data: Any) -> dict[str, Any]:
 class ProteusAPI:
     """Proteus API client."""
 
-    _rate_limited_until_by_account: ClassVar[dict[tuple[str, str], float]] = {}
-    _next_rate_limit_warning_by_account: ClassVar[dict[tuple[str, str], float]] = {}
+    _rate_limited_until_by_scope: ClassVar[dict[tuple[str, str, str], float]] = {}
+    _next_rate_limit_error_by_scope: ClassVar[dict[tuple[str, str, str], float]] = {}
 
     def __init__(
         self,
@@ -411,7 +434,9 @@ class ProteusAPI:
         self.tenant = tenant
         self._session = None
         self._last_data: dict[str, Any] | None = None
-        self._rate_limit_key = (self.tenant, self.email.strip().casefold())
+        self._last_price_data: dict[str, Any] | None = None
+        self._next_price_update = 0.0
+        self._account_key = (self.tenant, self.email.strip().casefold())
 
     def get_headers(self, *, for_post: bool = False) -> dict[str, str]:
         """Build HTTP headers for the next request.
@@ -611,50 +636,165 @@ class ProteusAPI:
                 data,
             )
 
-    def _get_rate_limit_remaining(self) -> int:
-        """Return seconds until the local rate-limit cooldown expires."""
-        rate_limited_until = self._rate_limited_until_by_account.get(
-            self._rate_limit_key, 0.0
-        )
-        remaining = rate_limited_until - monotonic()
-        if remaining <= 0:
-            return 0
-        return ceil(remaining)
+    def _rate_limit_key(self, scope: str) -> tuple[str, str, str]:
+        """Return the shared rate-limit key for an account and endpoint scope."""
+        return (*self._account_key, scope)
 
-    def _set_rate_limit_cooldown(self, retry_after: int) -> None:
+    def _get_rate_limit_remaining(self, scopes: tuple[str, ...]) -> int:
+        """Return seconds until the longest matching cooldown expires."""
+        now = monotonic()
+        remaining = 0
+        for scope in scopes:
+            rate_limited_until = self._rate_limited_until_by_scope.get(
+                self._rate_limit_key(scope), 0.0
+            )
+            if rate_limited_until > now:
+                remaining = max(remaining, ceil(rate_limited_until - now))
+        return remaining
+
+    def _set_rate_limit_cooldown(
+        self, retry_after: int, scopes: tuple[str, ...]
+    ) -> None:
         """Remember the server-requested rate-limit cooldown."""
-        self._rate_limited_until_by_account[self._rate_limit_key] = max(
-            self._rate_limited_until_by_account.get(self._rate_limit_key, 0.0),
-            monotonic() + retry_after,
-        )
+        rate_limited_until = monotonic() + retry_after
+        for scope in scopes:
+            rate_limit_key = self._rate_limit_key(scope)
+            self._rate_limited_until_by_scope[rate_limit_key] = max(
+                self._rate_limited_until_by_scope.get(rate_limit_key, 0.0),
+                rate_limited_until,
+            )
 
-    def _log_rate_limit(self, retry_after: int, error_messages: list[str]) -> None:
+    def _log_rate_limit(
+        self, retry_after: int, error_messages: list[str], scope: str
+    ) -> None:
         """Log rate limiting without the long batched request URL."""
         now = monotonic()
         log_level = logging.DEBUG
         extra = ""
-        next_warning = self._next_rate_limit_warning_by_account.get(
-            self._rate_limit_key, 0.0
-        )
-        if now >= next_warning:
-            log_level = logging.WARNING
-            self._next_rate_limit_warning_by_account[self._rate_limit_key] = (
-                now + RATE_LIMIT_WARNING_INTERVAL
+        rate_limit_key = self._rate_limit_key(scope)
+        next_error = self._next_rate_limit_error_by_scope.get(rate_limit_key, 0.0)
+        if now >= next_error:
+            log_level = logging.ERROR
+            self._next_rate_limit_error_by_scope[rate_limit_key] = (
+                now + RATE_LIMIT_ERROR_INTERVAL
             )
             extra = (
                 "; repeated rate-limit messages will be logged at debug "
-                f"for {RATE_LIMIT_WARNING_INTERVAL} seconds"
+                f"for {RATE_LIMIT_ERROR_INTERVAL} seconds"
             )
 
         _LOGGER.log(
             log_level,
-            "Proteus API rate-limited status refresh for inverter %s; "
+            "Proteus API rate-limited %s refresh for inverter %s; "
             "keeping previous values when available and retrying after %s seconds: %s%s",
+            scope,
             self.inverter_id,
             retry_after,
             "; ".join(error_messages),
             extra,
         )
+
+    def _build_inverter_batch_params(
+        self, endpoints: tuple[str, ...]
+    ) -> dict[str, str]:
+        """Build batch query params for inverter-scoped tRPC GET requests."""
+        return {
+            "batch": "1",
+            "input": json.dumps(
+                {
+                    str(index): {"json": {"inverterId": self.inverter_id}}
+                    for index in range(len(endpoints))
+                }
+            ),
+        }
+
+    async def _fetch_trpc_batch(
+        self,
+        client: RetryClient,
+        api_endpoint: str,
+        endpoints: tuple[str, ...],
+        *,
+        scope: str,
+    ) -> tuple[Any | None, bool]:
+        """Fetch one tRPC batch and report whether cached data should be kept."""
+        rate_limit_remaining = self._get_rate_limit_remaining(endpoints)
+        if rate_limit_remaining:
+            _LOGGER.debug(
+                "Skipping Proteus API %s refresh for inverter %s; "
+                "server rate-limit cooldown has %s seconds remaining",
+                scope,
+                self.inverter_id,
+                rate_limit_remaining,
+            )
+            return None, True
+
+        async with client.get(
+            f"{API_BASE_URL}{api_endpoint}",
+            params=self._build_inverter_batch_params(endpoints),
+            headers=self.get_headers(),
+        ) as response:
+            response_text = await response.text()
+            payload = self._parse_response_body(response_text)
+            retry_after = self._extract_trpc_rate_limit_retry_after(payload)
+
+            if response.status == TRPC_RATE_LIMIT_HTTP_STATUS:
+                retry_after = retry_after or UPDATE_INTERVAL
+                self._set_rate_limit_cooldown(retry_after, endpoints)
+                self._log_rate_limit(
+                    retry_after,
+                    self._extract_trpc_error_messages(payload, endpoints)
+                    or [f"HTTP {response.status}"],
+                    scope,
+                )
+                return None, True
+
+            if response.status not in {200, 207}:
+                _LOGGER.error(
+                    "API %s request %s failed with status %s (%s)",
+                    response.method,
+                    response.url,
+                    response.status,
+                    payload if payload is not None else response_text,
+                )
+                return None, False
+
+            if payload is None:
+                _LOGGER.error(
+                    "API %s request %s returned an unparsable response",
+                    response.method,
+                    response.url,
+                )
+                return None, False
+
+            keep_cached_data = False
+            rate_limit_error_messages = []
+            rate_limit_error_endpoints = []
+            other_error_messages = []
+            for error, endpoint in iter_trpc_errors_with_endpoints(payload, endpoints):
+                message = self._format_trpc_error(error, endpoint)
+                if is_trpc_rate_limit_error(error):
+                    keep_cached_data = True
+                    rate_limit_error_messages.append(message)
+                    if endpoint is not None:
+                        rate_limit_error_endpoints.append(endpoint)
+                else:
+                    other_error_messages.append(message)
+
+            if rate_limit_error_messages:
+                retry_after = retry_after or UPDATE_INTERVAL
+                rate_limit_scopes = tuple(rate_limit_error_endpoints) or endpoints
+                self._set_rate_limit_cooldown(retry_after, rate_limit_scopes)
+                self._log_rate_limit(retry_after, rate_limit_error_messages, scope)
+
+            if other_error_messages:
+                _LOGGER.warning(
+                    "API %s request for inverter %s returned partial tRPC errors: %s",
+                    response.method,
+                    self.inverter_id,
+                    "; ".join(other_error_messages),
+                )
+
+            return payload, keep_cached_data
 
     async def fetch_inverters(self) -> list[InverterDict]:
         """Fetch list of inverters available in the API."""
@@ -709,113 +849,59 @@ class ProteusAPI:
         """Fetch data from Proteus API."""
 
         try:
-            rate_limit_remaining = self._get_rate_limit_remaining()
-            if rate_limit_remaining:
-                _LOGGER.debug(
-                    "Skipping Proteus API status refresh for inverter %s; "
-                    "server rate-limit cooldown has %s seconds remaining",
-                    self.inverter_id,
-                    rate_limit_remaining,
-                )
-                return self._last_data
-
             client = await self._get_client()
 
-            params = {
-                "batch": "1",
-                "input": json.dumps(
-                    {
-                        "0": {"json": {"inverterId": self.inverter_id}},
-                        "1": {"json": {"inverterId": self.inverter_id}},
-                        "2": {"json": {"inverterId": self.inverter_id}},
-                        "3": {"json": {"inverterId": self.inverter_id}},
-                        "4": {"json": {"inverterId": self.inverter_id}},
-                        "5": {"json": {"inverterId": self.inverter_id}},
-                    }
-                ),
-            }
-            _LOGGER.debug("Fetching data for %s", self.inverter_id)
-
-            async with client.get(
-                f"{API_BASE_URL}{API_ENDPOINT}",
-                params=params,
-                headers=self.get_headers(),
-            ) as response:
-                response_text = await response.text()
-                payload = self._parse_response_body(response_text)
-                retry_after = self._extract_trpc_rate_limit_retry_after(payload)
-
-                if response.status == TRPC_RATE_LIMIT_HTTP_STATUS:
-                    retry_after = retry_after or UPDATE_INTERVAL
-                    self._set_rate_limit_cooldown(retry_after)
-                    self._log_rate_limit(
-                        retry_after,
-                        self._extract_trpc_error_messages(payload, STATUS_ENDPOINTS)
-                        or [f"HTTP {response.status}"],
-                    )
-                    return self._last_data
-
-                if response.status not in {200, 207}:
-                    _LOGGER.error(
-                        "API %s request %s failed with status %s (%s)",
-                        response.method,
-                        response.url,
-                        response.status,
-                        payload if payload is not None else response_text,
-                    )
-                    return None
-
-                if payload is None:
-                    _LOGGER.error(
-                        "API %s request %s returned an unparsable response",
-                        response.method,
-                        response.url,
-                    )
-                    return None
-
-                rate_limit_error_messages = []
-                other_error_messages = []
-                for error, endpoint in iter_trpc_errors_with_endpoints(
-                    payload, STATUS_ENDPOINTS
-                ):
-                    message = self._format_trpc_error(error, endpoint)
-                    if is_trpc_rate_limit_error(error):
-                        rate_limit_error_messages.append(message)
-                    else:
-                        other_error_messages.append(message)
-
-                if rate_limit_error_messages:
-                    retry_after = retry_after or UPDATE_INTERVAL
-                    self._set_rate_limit_cooldown(retry_after)
-                    self._log_rate_limit(retry_after, rate_limit_error_messages)
-
-                if other_error_messages:
-                    _LOGGER.warning(
-                        "API %s request for inverter %s returned partial tRPC errors: %s",
-                        response.method,
-                        self.inverter_id,
-                        "; ".join(other_error_messages),
-                    )
-
-                data = self._parse_data(payload)
-                if data:
-                    if rate_limit_error_messages and self._last_data is not None:
-                        data = {**self._last_data, **data}
-                    self._last_data = data
-                    return data
-
-                if rate_limit_error_messages:
-                    return self._last_data
-
-                _LOGGER.error(
-                    "API %s request %s did not contain any usable data",
-                    response.method,
-                    response.url,
-                )
+            _LOGGER.debug("Fetching status data for %s", self.inverter_id)
+            status_payload, keep_cached_status = await self._fetch_trpc_batch(
+                client,
+                API_STATUS_ENDPOINT,
+                API_STATUS_ENDPOINTS,
+                scope="status",
+            )
+            if status_payload is None and not keep_cached_status:
                 return None
+
+            if monotonic() >= self._next_price_update:
+                _LOGGER.debug("Fetching price data for %s", self.inverter_id)
+                price_payload, _ = await self._fetch_trpc_batch(
+                    client,
+                    API_PRICE_ENDPOINT,
+                    API_PRICE_ENDPOINTS,
+                    scope=API_PRICE_ENDPOINT,
+                )
+                price_data = parse_price_data(price_payload)
+                if price_data:
+                    self._last_price_data = price_data
+                    self._next_price_update = (
+                        monotonic() + get_seconds_until_next_price_update(time())
+                    )
+                else:
+                    retry_after = self._get_rate_limit_remaining(API_PRICE_ENDPOINTS)
+                    self._next_price_update = monotonic() + (
+                        retry_after or UPDATE_INTERVAL
+                    )
+
+            data = (
+                self._parse_data(status_payload) if status_payload is not None else {}
+            )
+            if data:
+                if keep_cached_status and self._last_data is not None:
+                    data = {**self._last_data, **data}
+                if self._last_price_data is not None:
+                    data = {**data, **self._last_price_data}
+                self._last_data = data
+                return data
+
+            if keep_cached_status:
+                if self._last_data is not None and self._last_price_data is not None:
+                    self._last_data = {**self._last_data, **self._last_price_data}
+                return self._last_data
 
         except Exception:
             _LOGGER.exception("Error fetching data")
+            return None
+        else:
+            _LOGGER.error("Proteus API status response did not contain any usable data")
             return None
 
     def _parse_data(self, raw_data: Any) -> dict[str, Any]:

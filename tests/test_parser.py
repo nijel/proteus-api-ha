@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from custom_components.proteus_api.proteus_api import parse_data
+from custom_components.proteus_api.const import PRICE_UPDATE_DELAY
+from custom_components.proteus_api.proteus_api import (
+    get_seconds_until_next_price_update,
+    parse_data,
+    parse_price_data,
+)
 
 
 def _build_payload(capabilities: list[str]) -> list[dict]:
@@ -115,6 +120,40 @@ def test_parses_distribution_prices() -> None:
         "poze": 0,
         "vat_rate": 0.21,
     }
+
+
+def test_parses_standalone_distribution_prices() -> None:
+    """Standalone distribution price responses should parse like batched payloads."""
+    parsed = parse_price_data([_build_payload(["UP_POWER"])[5]])
+
+    assert parsed["price_consumption_mwh"] == 8417.258278
+    assert parsed["price_consumption_kwh"] == 8.4173
+    assert parsed["price_production_mwh"] == 3711.4218
+    assert parsed["price_production_kwh"] == 3.7114
+    assert parsed["distribution_tariff_type"] == "HT"
+    assert parsed["price_components"] == {
+        "price_mwh": 4161.4218,
+        "distribution_price": 2252.45,
+        "distribution_tariff_type": "HT",
+        "fee_electricity_buy": 350,
+        "fee_electricity_sell": 450,
+        "tax_electricity": 28.3,
+        "system_services": 164.24,
+        "poze": 0,
+        "vat_rate": 0.21,
+    }
+
+
+def test_schedules_prices_after_next_quarter_hour_boundary() -> None:
+    """Price refreshes should align to quarter-hour tariff changes."""
+    assert (
+        get_seconds_until_next_price_update((16 * 60 * 60) + (14 * 60) + 50)
+        == 10 + PRICE_UPDATE_DELAY
+    )
+    assert (
+        get_seconds_until_next_price_update((16 * 60 * 60) + (15 * 60))
+        == (15 * 60) + PRICE_UPDATE_DELAY
+    )
 
 
 def test_missing_prices_do_not_break_existing_fields() -> None:
