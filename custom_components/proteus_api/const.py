@@ -4,7 +4,17 @@ DOMAIN = "proteus_api"
 
 # API endpoints
 API_BASE_URL = "https://proteus.deltagreen.cz/api/trpc/"
-API_ENDPOINT = "inverters.detail,inverters.flexibilityRewardsSummary,inverters.controls.state,commands.current,inverters.currentStep,prices.currentDistributionPrices"
+API_PRICE_ENDPOINT = "prices.currentDistributionPrices"
+API_PRICE_ENDPOINTS = (API_PRICE_ENDPOINT,)
+API_STATUS_ENDPOINTS = (
+    "inverters.detail",
+    "inverters.flexibilityRewardsSummary",
+    "inverters.controls.state",
+    "commands.current",
+    "inverters.currentStep",
+)
+API_STATUS_ENDPOINT = ",".join(API_STATUS_ENDPOINTS)
+API_ENDPOINT = ",".join((*API_STATUS_ENDPOINTS, API_PRICE_ENDPOINT))
 API_LIST_ENDPOINT = "inverters.list"
 API_CONTROL_ENDPOINT = "inverters.controls.updateManualControl"
 API_ENABLED_ENDPOINT = "inverters.controls.updateControlEnabled"
@@ -38,6 +48,8 @@ CONTROL_MODES = ["AUTOMATIC", "MANUAL"]
 COMMAND_NONE = "NONE"
 
 UPDATE_INTERVAL = 10
+PRICE_UPDATE_INTERVAL = 15 * 60
+PRICE_UPDATE_DELAY = 5
 
 TID_DELTA_GREEN = "TID_DELTA_GREEN"
 
