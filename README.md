@@ -55,10 +55,13 @@ Integrace automaticky objeví všechny invertory dostupné ve vašem účtu a vy
 - `sensor.proteus_obchodovani_flexibility_za_mesic` - Měsíční zisk z flexibility
 - `sensor.proteus_obchodovani_flexibility_celkem` - Celkový zisk z flexibility
 - `sensor.proteus_prikaz_flexibility` - Aktuální příkaz flexibility
+  - atributy: `command_id`, `command_source`, `command_start`, `command_effective_end`, `command_is_testing`, `flexibility_price_kwh`, `price_up_kwh`, `price_down_kwh`
   - `UP_POWER` - Dodávka do sítě
   - `DOWN_BATTERY_SOLAR_CURTAILMENT_POWER` - Odběr ze sítě
   - `DOWN_SOLAR_CURTAILMENT_POWER` - Zákaz přetoků
   - `NONE` - Žádný
+- `sensor.proteus_cena_flexibility` - Aktuální cena flexibility v Kč/kWh
+  - atributy: `flexibility_price_mwh`, `price_up_kwh`, `price_down_kwh`
 - `sensor.proteus_konec_flexibility` - Konec příkazu flexibility
 - `sensor.proteus_rezim_baterie` - Režim baterie
 - `sensor.proteus_zalozhni_rezim_baterie` - Záložní režim baterie

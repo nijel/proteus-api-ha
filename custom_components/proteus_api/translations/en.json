@@ -74,6 +74,9 @@
       "command": {
         "name": "Flexibility command"
       },
+      "flexibility_price": {
+        "name": "Flexibility price"
+      },
       "command_end": {
         "name": "Flexibility command end"
       },

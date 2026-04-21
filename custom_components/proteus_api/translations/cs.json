@@ -74,6 +74,9 @@
       "command": {
         "name": "Příkaz flexibility"
       },
+      "flexibility_price": {
+        "name": "Cena flexibility"
+      },
       "command_end": {
         "name": "Konec flexibility"
       },
