@@ -59,6 +59,7 @@ Integrace automaticky objeví všechny invertory dostupné ve vašem účtu a vy
   - `UP_POWER` - Dodávka do sítě
   - `DOWN_BATTERY_SOLAR_CURTAILMENT_POWER` - Odběr ze sítě
   - `DOWN_SOLAR_CURTAILMENT_POWER` - Zákaz přetoků
+  - `BALANCING_SERVICES` - Výkonová rovnováha
   - `NONE` - Žádný
 - `sensor.proteus_cena_flexibility` - Aktuální cena flexibility v Kč/kWh
   - atributy: `flexibility_price_mwh`, `price_up_kwh`, `price_down_kwh`
