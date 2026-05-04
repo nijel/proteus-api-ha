@@ -124,30 +124,41 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
 
     inverter_data = {}
-    for inverter in inverters:
-        inverter_id = inverter["id"]
-        _LOGGER.info(
-            "Setting up inverter %s (%s)",
-            inverter_id,
-            inverter.get("vendor", "Unknown"),
-        )
+    created_apis: dict[str, ProteusAPI] = {}
+    try:
+        for inverter in inverters:
+            inverter_id = inverter["id"]
+            _LOGGER.info(
+                "Setting up inverter %s (%s)",
+                inverter_id,
+                inverter.get("vendor", "Unknown"),
+            )
 
-        api = ProteusAPI(inverter_id, email, password)
-        coordinator = ProteusDataUpdateCoordinator(
-            hass,
-            _LOGGER,
-            name=f"proteus_api_{inverter_id}",
-            update_method=api.get_data,
-            update_interval=timedelta(seconds=UPDATE_INTERVAL),
-        )
+            api = ProteusAPI(inverter_id, email, password)
+            created_apis[inverter_id] = api
+            coordinator = ProteusDataUpdateCoordinator(
+                hass,
+                _LOGGER,
+                name=f"proteus_api_{inverter_id}",
+                update_method=api.get_data,
+                update_interval=timedelta(seconds=UPDATE_INTERVAL),
+            )
 
-        await coordinator.async_config_entry_first_refresh()
+            await coordinator.async_config_entry_first_refresh()
 
-        inverter_data[inverter_id] = {
-            "coordinator": coordinator,
-            "api": api,
-            "inverter": inverter,
-        }
+            inverter_data[inverter_id] = {
+                "coordinator": coordinator,
+                "api": api,
+                "inverter": inverter,
+            }
+    except Exception:
+        for inverter_id, api in created_apis.items():
+            await api.close()
+            _LOGGER.debug(
+                "Closed API session for inverter %s after setup failure",
+                inverter_id,
+            )
+        raise
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
         "inverters": inverter_data,
