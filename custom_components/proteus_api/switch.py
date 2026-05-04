@@ -162,10 +162,10 @@ class ProteusManualControlSwitch(ProteusOptimisticSwitch):
     @property
     def available(self) -> bool:
         """Return entity availability."""
-        if self.coordinator.data is None:
+        if not super().available or self.coordinator.data is None:
             return False
         return (
-            self.coordinator.data.get("control_enabled")
+            bool(self.coordinator.data.get("control_enabled"))
             and self.coordinator.data.get("control_mode") == "MANUAL"
         )
 
@@ -245,9 +245,9 @@ class ProteusAutomaticModeSwitch(ProteusOptimisticSwitch):
     @property
     def available(self) -> bool:
         """Return entity availability."""
-        if self.coordinator.data is None:
+        if not super().available or self.coordinator.data is None:
             return False
-        return self.coordinator.data.get("control_enabled")
+        return bool(self.coordinator.data.get("control_enabled"))
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the switch on (enable automatic mode)."""
@@ -283,9 +283,9 @@ class ProteusFlexibilityModeSwitch(ProteusOptimisticSwitch):
     @property
     def available(self) -> bool:
         """Return entity availability."""
-        if self.coordinator.data is None:
+        if not super().available or self.coordinator.data is None:
             return False
-        return self.coordinator.data.get("control_enabled")
+        return bool(self.coordinator.data.get("control_enabled"))
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the switch on (enable automatic mode)."""
