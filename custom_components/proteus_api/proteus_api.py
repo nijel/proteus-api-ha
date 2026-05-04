@@ -393,102 +393,180 @@ def get_seconds_until_next_price_update(now: float) -> float:
     return max(0, next_boundary - now + PRICE_UPDATE_DELAY)
 
 
+def is_number(value: Any) -> bool:
+    """Return whether a value is a non-boolean API number."""
+    return isinstance(value, int | float) and not isinstance(value, bool)
+
+
+def parse_detail_payload(detail: Any) -> dict[str, Any]:
+    """Parse inverter detail fields."""
+    parsed: dict[str, Any] = {}
+    if not isinstance(detail, dict):
+        return parsed
+
+    household = detail.get("household")
+    flexibility_state = (
+        household.get("flexibilityState") if isinstance(household, dict) else None
+    )
+    if flexibility_state is not None:
+        parsed["flexibility_state"] = flexibility_state
+    if detail.get("controlMode") is not None:
+        parsed["control_mode"] = detail.get("controlMode")
+    if detail.get("controlEnabled") is not None:
+        parsed["control_enabled"] = detail.get("controlEnabled")
+
+    return parsed
+
+
+def parse_rewards_payload(rewards: Any) -> dict[str, Any]:
+    """Parse flexibility reward fields."""
+    parsed: dict[str, Any] = {}
+    if not isinstance(rewards, dict):
+        return parsed
+
+    reward_fields = (
+        ("todayWithVat", "flexibility_today"),
+        ("monthToDateWithVat", "flexibility_month"),
+        ("totalWithVat", "flexibility_total"),
+    )
+    for source_key, parsed_key in reward_fields:
+        value = rewards.get(source_key)
+        if is_number(value):
+            parsed[parsed_key] = round(value, 2)
+
+    return parsed
+
+
+def parse_manual_controls_payload(manual_controls: Any) -> dict[str, bool]:
+    """Parse manual control states."""
+    parsed: dict[str, bool] = {}
+    if not isinstance(manual_controls, list):
+        return parsed
+
+    for control in manual_controls:
+        if not isinstance(control, dict):
+            continue
+        control_type = control.get("type")
+        control_state = control.get("state")
+        if isinstance(control_type, str) and control_state is not None:
+            parsed[control_type] = control_state == "ENABLED"
+
+    return parsed
+
+
+def get_flexibility_mode(flexibility_capabilities: list[Any]) -> str:
+    """Return the flexibility mode for enabled capability names."""
+    enabled_capabilities = {
+        capability
+        for capability in flexibility_capabilities
+        if isinstance(capability, str)
+    }
+    all_capabilities = set(FLEXIBILITY_CAPABILITIES)
+    if not enabled_capabilities:
+        return "NONE"
+    if enabled_capabilities == all_capabilities:
+        return "FULL"
+    return "PARTIAL"
+
+
+def parse_controls_payload(controls: Any) -> dict[str, Any]:
+    """Parse control and capability fields."""
+    parsed: dict[str, Any] = {}
+    if not isinstance(controls, dict):
+        return parsed
+
+    manual_controls = controls.get("manualControls")
+    if isinstance(manual_controls, list):
+        parsed["manual_controls"] = parse_manual_controls_payload(manual_controls)
+
+    flexibility_capabilities = controls.get("flexibilityCapabilitiesEnabled")
+    if isinstance(flexibility_capabilities, list):
+        parsed["flexibility_capabilities"] = flexibility_capabilities
+        parsed["flexibility_mode"] = get_flexibility_mode(flexibility_capabilities)
+
+    return parsed
+
+
+def parse_command_payload(command_data: Any) -> dict[str, Any]:
+    """Parse current flexibility command fields."""
+    parsed: dict[str, Any] = {}
+    if not isinstance(command_data, dict):
+        return parsed
+
+    command = command_data.get("command")
+    if not command or not isinstance(command, dict):
+        parsed["current_command"] = COMMAND_NONE
+        parsed["command_end"] = None
+        return parsed
+
+    command_type = command.get("type")
+    if not isinstance(command_type, str):
+        return parsed
+
+    parsed["current_command"] = command_type
+    command_end = parse_optional_datetime(command.get("endAt"))
+    if command_end is not None:
+        parsed["command_end"] = command_end
+    command_start = parse_optional_datetime(command.get("startAt"))
+    if command_start is not None:
+        parsed["command_start"] = command_start
+    command_effective_end = parse_optional_datetime(command.get("effectiveEndAt"))
+    if command_effective_end is not None:
+        parsed["command_effective_end"] = command_effective_end
+    if command.get("id") is not None:
+        parsed["command_id"] = command.get("id")
+    if command.get("source") is not None:
+        parsed["command_source"] = command.get("source")
+    if command.get("isTesting") is not None:
+        parsed["command_is_testing"] = command.get("isTesting")
+
+    flexibility_price = parse_flexibility_price_payload(command_data.get("price"))
+    select_flexibility_price(flexibility_price, command_type)
+    parsed.update(flexibility_price)
+    if "flexibility_price_kwh" not in flexibility_price:
+        _LOGGER.warning(
+            "Current flexibility command payload did not contain the expected "
+            "price field for command type %s: %s",
+            command_type,
+            command_data,
+        )
+
+    return parsed
+
+
+def parse_current_step_payload(current_step: Any) -> dict[str, Any]:
+    """Parse current flexalgo step metadata fields."""
+    parsed: dict[str, Any] = {}
+    if not isinstance(current_step, dict):
+        return parsed
+
+    metadata = current_step.get("metadata")
+    if not isinstance(metadata, dict):
+        return parsed
+
+    parsed["flexalgo_battery"] = metadata.get("flexalgoBattery")
+    parsed["flexalgo_battery_fallback"] = metadata.get("flexalgoBatteryFallback")
+    parsed["flexalgo_pv"] = metadata.get("flexalgoPv")
+    parsed["target_soc"] = metadata.get("targetSoC")
+    parsed["predicted_production"] = metadata.get("predictedProduction")
+    parsed["predicted_consumption"] = metadata.get("predictedConsumption")
+
+    return parsed
+
+
 def parse_data(raw_data: Any) -> dict[str, Any]:
     """Parse raw API data into structured format."""
     if not isinstance(raw_data, list) or len(raw_data) < 5:
         _LOGGER.error("Missing data: %s", raw_data)
         return {}
 
-    parsed = {}
-
-    try:
-        detail = get_trpc_result_json(raw_data, 0)
-        if isinstance(detail, dict):
-            parsed["flexibility_state"] = detail["household"]["flexibilityState"]
-            parsed["control_mode"] = detail["controlMode"]
-            parsed["control_enabled"] = detail["controlEnabled"]
-
-        rewards = get_trpc_result_json(raw_data, 1)
-        if isinstance(rewards, dict):
-            parsed["flexibility_today"] = round(rewards["todayWithVat"], 2)
-            parsed["flexibility_month"] = round(rewards["monthToDateWithVat"], 2)
-            parsed["flexibility_total"] = round(rewards["totalWithVat"], 2)
-
-        controls = get_trpc_result_json(raw_data, 2)
-        if isinstance(controls, dict):
-            manual_controls = controls["manualControls"]
-            parsed["manual_controls"] = {}
-            for control in manual_controls:
-                parsed["manual_controls"][control["type"]] = (
-                    control["state"] == "ENABLED"
-                )
-
-            parsed["flexibility_capabilities"] = controls[
-                "flexibilityCapabilitiesEnabled"
-            ]
-            enabled_capabilities = set(parsed["flexibility_capabilities"])
-            all_capabilities = set(FLEXIBILITY_CAPABILITIES)
-            if not enabled_capabilities:
-                parsed["flexibility_mode"] = "NONE"
-            elif enabled_capabilities == all_capabilities:
-                parsed["flexibility_mode"] = "FULL"
-            else:
-                parsed["flexibility_mode"] = "PARTIAL"
-
-        command_data = get_trpc_result_json(raw_data, 3)
-        if isinstance(command_data, dict) and command_data.get("command"):
-            command = command_data["command"]
-            command_type = command["type"]
-            parsed["current_command"] = command_type
-            parsed["command_end"] = datetime.fromisoformat(command["endAt"])
-            command_start = parse_optional_datetime(command.get("startAt"))
-            if command_start is not None:
-                parsed["command_start"] = command_start
-            command_effective_end = parse_optional_datetime(
-                command.get("effectiveEndAt")
-            )
-            if command_effective_end is not None:
-                parsed["command_effective_end"] = command_effective_end
-            if command.get("id") is not None:
-                parsed["command_id"] = command.get("id")
-            if command.get("source") is not None:
-                parsed["command_source"] = command.get("source")
-            if command.get("isTesting") is not None:
-                parsed["command_is_testing"] = command.get("isTesting")
-            flexibility_price = parse_flexibility_price_payload(
-                command_data.get("price")
-            )
-            select_flexibility_price(flexibility_price, command_type)
-            parsed.update(flexibility_price)
-            if "flexibility_price_kwh" not in flexibility_price:
-                _LOGGER.warning(
-                    "Current flexibility command payload did not contain the expected "
-                    "price field for command type %s: %s",
-                    command_type,
-                    command_data,
-                )
-        elif command_data is not None:
-            parsed["current_command"] = COMMAND_NONE
-            parsed["command_end"] = None
-
-        current_step = get_trpc_result_json(raw_data, 4)
-        if isinstance(current_step, dict):
-            metadata = current_step["metadata"]
-            parsed["flexalgo_battery"] = metadata.get("flexalgoBattery")
-            parsed["flexalgo_battery_fallback"] = metadata.get(
-                "flexalgoBatteryFallback"
-            )
-            parsed["flexalgo_pv"] = metadata.get("flexalgoPv")
-            parsed["target_soc"] = metadata.get("targetSoC")
-            parsed["predicted_production"] = metadata.get("predictedProduction")
-            parsed["predicted_consumption"] = metadata.get("predictedConsumption")
-
-        prices = get_trpc_result_json(raw_data, 5)
-        parsed.update(parse_price_payload(prices))
-
-    except Exception:
-        _LOGGER.exception("Error parsing data")
-        return {}
+    parsed: dict[str, Any] = {}
+    parsed.update(parse_detail_payload(get_trpc_result_json(raw_data, 0)))
+    parsed.update(parse_rewards_payload(get_trpc_result_json(raw_data, 1)))
+    parsed.update(parse_controls_payload(get_trpc_result_json(raw_data, 2)))
+    parsed.update(parse_command_payload(get_trpc_result_json(raw_data, 3)))
+    parsed.update(parse_current_step_payload(get_trpc_result_json(raw_data, 4)))
+    parsed.update(parse_price_payload(get_trpc_result_json(raw_data, 5)))
 
     _LOGGER.debug("Parsed status %s", parsed)
     return parsed
