@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import timedelta
 import logging
 
+import aiohttp
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, callback
@@ -111,7 +113,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except AuthenticationError as ex:
         _LOGGER.error("Authentication failed: %s", ex)
         raise ConfigEntryAuthFailed(f"Authentication failed: {ex}") from ex
-    except ConnectionError as ex:
+    except (ConnectionError, aiohttp.ClientError, TimeoutError) as ex:
         _LOGGER.error("Failed to fetch inverters: %s", ex)
         raise ConfigEntryNotReady(f"Failed to fetch inverters: {ex}") from ex
     finally:

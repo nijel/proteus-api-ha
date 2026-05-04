@@ -7,6 +7,7 @@ import logging
 from typing import Any
 from unittest.mock import AsyncMock
 
+from aiohttp.client_exceptions import ClientConnectionError
 import pytest
 
 from custom_components.proteus_api import ProteusDataUpdateCoordinator
@@ -58,6 +59,42 @@ class ExposedProteusDataUpdateCoordinator(ProteusDataUpdateCoordinator):
     async def update_once(self) -> Any:
         """Run the protected coordinator update implementation."""
         return await self._async_update_data()
+
+
+class FailingLoginSession:
+    """aiohttp session test double that fails login transport."""
+
+    instances: list[FailingLoginSession] = []
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Record the created session."""
+        self.closed = False
+        self.instances.append(self)
+
+    def post(self, *args: Any, **kwargs: Any) -> Any:
+        """Raise the same transport family as aiohttp connector failures."""
+        raise ClientConnectionError("connection reset")
+
+    async def close(self) -> None:
+        """Record session cleanup."""
+        self.closed = True
+
+
+@pytest.mark.asyncio
+async def test_login_transport_errors_are_connection_errors(monkeypatch) -> None:
+    """Login transport errors should not leak aiohttp exceptions."""
+    FailingLoginSession.instances.clear()
+    monkeypatch.setattr(
+        "custom_components.proteus_api.proteus_api.aiohttp.ClientSession",
+        FailingLoginSession,
+    )
+    api = ProteusAPI("", "user@example.com", "secret")
+
+    with pytest.raises(ConnectionError, match="Failed to connect to Proteus API"):
+        await api.fetch_inverters()
+
+    assert len(FailingLoginSession.instances) == 1
+    assert FailingLoginSession.instances[0].closed is True
 
 
 @pytest.mark.asyncio

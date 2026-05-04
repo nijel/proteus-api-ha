@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from aiohttp.client_exceptions import ClientConnectionError
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 import custom_components.proteus_api as proteus_integration
 from custom_components.proteus_api.const import DOMAIN
+from homeassistant.exceptions import ConfigEntryNotReady
 
 
 class FakeProteusAPI:
@@ -56,6 +58,14 @@ class FailingSecondCoordinator:
             raise RuntimeError("refresh failed")
 
 
+class ConnectionFailingProteusAPI(FakeProteusAPI):
+    """Proteus API test double that fails during inverter discovery."""
+
+    async def fetch_inverters(self) -> list[dict[str, str]]:
+        """Raise a raw aiohttp transport error."""
+        raise ClientConnectionError("cannot connect")
+
+
 @pytest.mark.asyncio
 async def test_setup_closes_created_api_clients_when_inverter_refresh_fails(
     hass, monkeypatch, enable_custom_integrations
@@ -85,4 +95,27 @@ async def test_setup_closes_created_api_clients_when_inverter_refresh_fails(
         "inv-2",
     ]
     assert [api.close_calls for api in FakeProteusAPI.instances] == [1, 1, 1]
+    assert entry.entry_id not in hass.data.get(DOMAIN, {})
+
+
+@pytest.mark.asyncio
+async def test_setup_retries_raw_aiohttp_connection_errors(
+    hass, monkeypatch, enable_custom_integrations
+) -> None:
+    """Startup transport failures should ask Home Assistant to retry setup."""
+    FakeProteusAPI.instances.clear()
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"email": "user@example.com", "password": "secret"},
+        unique_id="user@example.com",
+    )
+    entry.add_to_hass(hass)
+
+    monkeypatch.setattr(proteus_integration, "ProteusAPI", ConnectionFailingProteusAPI)
+
+    with pytest.raises(ConfigEntryNotReady, match="cannot connect"):
+        await proteus_integration.async_setup_entry(hass, entry)
+
+    assert len(FakeProteusAPI.instances) == 1
+    assert FakeProteusAPI.instances[0].close_calls == 1
     assert entry.entry_id not in hass.data.get(DOMAIN, {})
