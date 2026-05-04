@@ -49,6 +49,14 @@ class AuthenticationError(Exception):
     """Exception raised for authentication failures."""
 
 
+def format_connection_error(exception: BaseException) -> str:
+    """Format transport errors for user-facing Home Assistant retry messages."""
+    message = str(exception)
+    if message:
+        return f"Failed to connect to Proteus API: {message}"
+    return f"Failed to connect to Proteus API ({type(exception).__name__})"
+
+
 class InverterDict(TypedDict):
     """Inverter definition as retrieved from the API."""
 
@@ -637,33 +645,39 @@ class ProteusAPI:
             }
 
             # Authenticate
-            async with self._session.post(
-                f"{API_BASE_URL}{API_LOGIN_ENDPOINT}",
-                json=payload,
-            ) as response:
-                if response.status == 401:
-                    await self._log_error(response)
-                    # Close session on auth failure to prevent resource leak
-                    await self._session.close()
-                    self._session = None
-                    raise AuthenticationError("Invalid email or password")
-                if response.status != 200:
-                    error_message = await self._extract_error_message(response)
-                    await self._log_error(response)
-                    # Close session on failure to prevent resource leak
-                    await self._session.close()
-                    self._session = None
-                    if response.status == 400:
-                        raise AuthenticationError(
+            try:
+                async with self._session.post(
+                    f"{API_BASE_URL}{API_LOGIN_ENDPOINT}",
+                    json=payload,
+                ) as response:
+                    if response.status == 401:
+                        await self._log_error(response)
+                        await self._reset_session()
+                        raise AuthenticationError("Invalid email or password")
+                    if response.status != 200:
+                        error_message = await self._extract_error_message(response)
+                        await self._log_error(response)
+                        await self._reset_session()
+                        if response.status == 400:
+                            raise AuthenticationError(
+                                error_message
+                                or f"Authentication failed (HTTP {response.status})"
+                            )
+                        raise ConnectionError(
                             error_message
-                            or f"Authentication failed (HTTP {response.status})"
+                            or f"Failed to connect to Proteus API (HTTP {response.status})"
                         )
-                    raise ConnectionError(
-                        error_message
-                        or f"Failed to connect to Proteus API (HTTP {response.status})"
-                    )
+            except (aiohttp.ClientError, TimeoutError) as exception:
+                await self._reset_session()
+                raise ConnectionError(format_connection_error(exception)) from exception
 
         return self._session
+
+    async def _reset_session(self) -> None:
+        """Close and discard the current session after login failures."""
+        if self._session is not None:
+            await self._session.close()
+            self._session = None
 
     async def _get_client(self) -> RetryClient:
         session = await self._get_session()
@@ -682,7 +696,7 @@ class ProteusAPI:
         try:
             data = await response.json()
             return data["error"]["json"]["message"]
-        except (JSONDecodeError, KeyError, TypeError):
+        except (aiohttp.ContentTypeError, JSONDecodeError, KeyError, TypeError):
             return None
 
     def _parse_response_body(self, response_text: str) -> Any | None:
@@ -778,7 +792,7 @@ class ProteusAPI:
     async def _log_error(self, response: aiohttp.ClientResponse) -> None:
         try:
             data = await response.json()
-        except JSONDecodeError:
+        except (aiohttp.ContentTypeError, JSONDecodeError):
             _LOGGER.error(
                 "API %s request %s failed with status %s",
                 response.method,
