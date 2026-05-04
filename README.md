@@ -95,6 +95,22 @@ Integrace automaticky objeví všechny invertory dostupné ve vašem účtu a vy
 - `switch.proteus_zakaz_pretoku` - Ovládání zákazu přetoků
 - `switch.proteus_rizeni_fve` - Povolení řízení FVE
 
+## Vývoj
+
+Projekt používá `uv` a závislosti pro testy jsou definované v `pyproject.toml`.
+
+Instalace vývojového prostředí:
+
+```console
+uv sync --group dev
+```
+
+Spuštění testů:
+
+```console
+uv run --group dev python -m pytest tests -v
+```
+
 ## Licence
 
 MIT License

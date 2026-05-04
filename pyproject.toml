@@ -1,3 +1,20 @@
+[dependency-groups]
+dev = [
+  "homeassistant",
+  "pytest",
+  "pytest-asyncio",
+  "pytest-homeassistant-custom-component"
+]
+
+[project]
+dependencies = [
+  "aiohttp>=3.8.0",
+  "aiohttp-retry>=2.9.1"
+]
+name = "proteus-api-ha"
+requires-python = ">=3.13"
+version = "0.3.2"
+
 [tool.codespell]
 ignore-words-list = "hass"
 
@@ -245,3 +262,6 @@ max-complexity = 25
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 property-decorators = ["propcache.api.cached_property"]
+
+[tool.uv]
+package = false
