@@ -925,64 +925,54 @@ class ProteusAPI:
                 )
             return inverters
 
-    async def get_data(self) -> dict[str, Any] | None:
+    async def get_data(self) -> dict[str, Any]:
         """Fetch data from Proteus API."""
 
-        try:
-            client = await self._get_client()
+        client = await self._get_client()
 
-            _LOGGER.debug("Fetching status data for %s", self.inverter_id)
-            status_payload, keep_cached_status = await self._fetch_trpc_batch(
+        _LOGGER.debug("Fetching status data for %s", self.inverter_id)
+        status_payload, keep_cached_status = await self._fetch_trpc_batch(
+            client,
+            API_STATUS_ENDPOINT,
+            API_STATUS_ENDPOINTS,
+            scope="status",
+        )
+        if status_payload is None and not keep_cached_status:
+            raise ConnectionError("Proteus API status data could not be fetched")
+
+        if monotonic() >= self._next_price_update:
+            _LOGGER.debug("Fetching price data for %s", self.inverter_id)
+            price_payload, _ = await self._fetch_trpc_batch(
                 client,
-                API_STATUS_ENDPOINT,
-                API_STATUS_ENDPOINTS,
-                scope="status",
+                API_PRICE_ENDPOINT,
+                API_PRICE_ENDPOINTS,
+                scope=API_PRICE_ENDPOINT,
             )
-            if status_payload is None and not keep_cached_status:
-                return None
-
-            if monotonic() >= self._next_price_update:
-                _LOGGER.debug("Fetching price data for %s", self.inverter_id)
-                price_payload, _ = await self._fetch_trpc_batch(
-                    client,
-                    API_PRICE_ENDPOINT,
-                    API_PRICE_ENDPOINTS,
-                    scope=API_PRICE_ENDPOINT,
+            price_data = parse_price_data(price_payload)
+            if price_data:
+                self._last_price_data = price_data
+                self._next_price_update = (
+                    monotonic() + get_seconds_until_next_price_update(time())
                 )
-                price_data = parse_price_data(price_payload)
-                if price_data:
-                    self._last_price_data = price_data
-                    self._next_price_update = (
-                        monotonic() + get_seconds_until_next_price_update(time())
-                    )
-                else:
-                    retry_after = self._get_rate_limit_remaining(API_PRICE_ENDPOINTS)
-                    self._next_price_update = monotonic() + (
-                        retry_after or UPDATE_INTERVAL
-                    )
+            else:
+                retry_after = self._get_rate_limit_remaining(API_PRICE_ENDPOINTS)
+                self._next_price_update = monotonic() + (retry_after or UPDATE_INTERVAL)
 
-            data = (
-                self._parse_data(status_payload) if status_payload is not None else {}
-            )
-            if data:
-                if keep_cached_status and self._last_data is not None:
-                    data = {**self._last_data, **data}
-                if self._last_price_data is not None:
-                    data = {**data, **self._last_price_data}
-                self._last_data = data
-                return data
+        data = self._parse_data(status_payload) if status_payload is not None else {}
+        if data:
+            if keep_cached_status and self._last_data is not None:
+                data = {**self._last_data, **data}
+            if self._last_price_data is not None:
+                data = {**data, **self._last_price_data}
+            self._last_data = data
+            return data
 
-            if keep_cached_status:
-                if self._last_data is not None and self._last_price_data is not None:
-                    self._last_data = {**self._last_data, **self._last_price_data}
-                return self._last_data
+        if keep_cached_status and self._last_data is not None:
+            if self._last_price_data is not None:
+                self._last_data = {**self._last_data, **self._last_price_data}
+            return self._last_data
 
-        except Exception:
-            _LOGGER.exception("Error fetching data")
-            return None
-        else:
-            _LOGGER.error("Proteus API status response did not contain any usable data")
-            return None
+        raise ConnectionError("Proteus API status response did not contain usable data")
 
     def _parse_data(self, raw_data: Any) -> dict[str, Any]:
         """Parse raw API data into structured format."""

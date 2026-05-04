@@ -1,0 +1,144 @@
+"""Tests for update error propagation."""
+
+from __future__ import annotations
+
+from datetime import timedelta
+import logging
+from typing import Any
+from unittest.mock import AsyncMock
+
+import pytest
+
+from custom_components.proteus_api import ProteusDataUpdateCoordinator
+from custom_components.proteus_api.const import UPDATE_INTERVAL
+from custom_components.proteus_api.proteus_api import AuthenticationError, ProteusAPI
+from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers.update_coordinator import UpdateFailed
+
+
+class StubProteusAPI(ProteusAPI):
+    """Proteus API client with network access replaced by test doubles."""
+
+    def __init__(self) -> None:
+        """Initialize the stub client."""
+        super().__init__("inverter-1", "user@example.com", "secret")
+        self.client = object()
+        self.parsed_data: dict[str, Any] = {}
+        self.price_result: tuple[Any | None, bool] = (None, False)
+        self.status_exception: Exception | None = None
+        self.status_result: tuple[Any | None, bool] = ([], False)
+        self._next_price_update = float("inf")
+
+    def set_cached_data(self, data: dict[str, Any]) -> None:
+        """Set the cached status data."""
+        self._last_data = data
+
+    async def _get_client(self) -> object:
+        """Return a stub client."""
+        return self.client
+
+    async def _fetch_trpc_batch(
+        self, *args: Any, scope: str
+    ) -> tuple[Any | None, bool]:
+        """Return stubbed status or price responses."""
+        if scope == "status":
+            if self.status_exception is not None:
+                raise self.status_exception
+            return self.status_result
+        return self.price_result
+
+    def _parse_data(self, raw_data: Any) -> dict[str, Any]:
+        """Return stubbed parser output."""
+        return self.parsed_data
+
+
+class ExposedProteusDataUpdateCoordinator(ProteusDataUpdateCoordinator):
+    """Coordinator exposing one update call for unit tests."""
+
+    async def update_once(self) -> Any:
+        """Run the protected coordinator update implementation."""
+        return await self._async_update_data()
+
+
+@pytest.mark.asyncio
+async def test_get_data_propagates_authentication_error() -> None:
+    """Authentication failures should reach the coordinator."""
+    api = StubProteusAPI()
+    api.status_exception = AuthenticationError("expired session")
+
+    with pytest.raises(AuthenticationError, match="expired session"):
+        await api.get_data()
+
+
+@pytest.mark.asyncio
+async def test_get_data_raises_when_status_fetch_fails() -> None:
+    """A failed status fetch should be an update failure, not None data."""
+    api = StubProteusAPI()
+    api.status_result = (None, False)
+
+    with pytest.raises(ConnectionError, match="could not be fetched"):
+        await api.get_data()
+
+
+@pytest.mark.asyncio
+async def test_get_data_raises_when_status_payload_has_no_usable_data() -> None:
+    """Unusable status payloads should fail the coordinator update."""
+    api = StubProteusAPI()
+    api.status_result = ([{"result": {"data": {"json": {}}}}], False)
+    api.parsed_data = {}
+
+    with pytest.raises(ConnectionError, match="did not contain usable data"):
+        await api.get_data()
+
+
+@pytest.mark.asyncio
+async def test_get_data_returns_cached_status_during_status_cooldown() -> None:
+    """Rate-limited status refreshes should keep previous data when available."""
+    api = StubProteusAPI()
+    cached_data = {"state": "ok"}
+    api.set_cached_data(cached_data)
+    api.status_result = (None, True)
+
+    assert await api.get_data() == cached_data
+
+
+@pytest.mark.asyncio
+async def test_get_data_raises_during_status_cooldown_without_cached_status() -> None:
+    """A first update with no status data should not return None."""
+    api = StubProteusAPI()
+    api.status_result = (None, True)
+
+    with pytest.raises(ConnectionError, match="did not contain usable data"):
+        await api.get_data()
+
+
+@pytest.mark.asyncio
+async def test_coordinator_converts_authentication_errors(hass) -> None:
+    """Authentication errors should trigger Home Assistant reauth handling."""
+    update_method = AsyncMock(side_effect=AuthenticationError("expired session"))
+    coordinator = ExposedProteusDataUpdateCoordinator(
+        hass,
+        logging.getLogger(__name__),
+        "Proteus API",
+        update_method,
+        timedelta(seconds=UPDATE_INTERVAL),
+    )
+
+    with pytest.raises(ConfigEntryAuthFailed, match="expired session"):
+        await coordinator.update_once()
+
+
+@pytest.mark.asyncio
+async def test_coordinator_converts_connection_errors_to_update_failed(hass) -> None:
+    """Connection errors should trigger Home Assistant update failure handling."""
+    update_method = AsyncMock(side_effect=ConnectionError("status unavailable"))
+    coordinator = ExposedProteusDataUpdateCoordinator(
+        hass,
+        logging.getLogger(__name__),
+        "Proteus API",
+        update_method,
+        timedelta(seconds=UPDATE_INTERVAL),
+    )
+
+    with pytest.raises(UpdateFailed, match="status unavailable"):
+        await coordinator.update_once()
