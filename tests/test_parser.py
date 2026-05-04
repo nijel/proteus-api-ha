@@ -262,6 +262,57 @@ def test_missing_prices_do_not_break_existing_fields() -> None:
     assert "price_consumption_kwh" not in parsed
 
 
+def test_missing_metadata_does_not_break_existing_fields() -> None:
+    """Missing flexalgo metadata should not discard other parsed sections."""
+    payload = _build_payload(["UP_POWER"])
+    payload[4] = {"result": {"data": {"json": {}}}}
+
+    parsed = parse_data(payload)
+
+    assert parsed["flexibility_state"] == "USABLE"
+    assert parsed["flexibility_mode"] == "PARTIAL"
+    assert parsed["flexibility_today"] == 1.0
+    assert parsed["price_consumption_kwh"] == 8.4173
+    assert "flexalgo_battery" not in parsed
+    assert "target_soc" not in parsed
+
+
+def test_missing_rewards_do_not_break_existing_fields() -> None:
+    """Missing reward fields should not discard other parsed sections."""
+    payload = _build_payload(["UP_POWER"])
+    payload[1] = {"result": {"data": {"json": {}}}}
+
+    parsed = parse_data(payload)
+
+    assert parsed["flexibility_state"] == "USABLE"
+    assert parsed["flexibility_mode"] == "PARTIAL"
+    assert parsed["price_consumption_kwh"] == 8.4173
+    assert "flexibility_today" not in parsed
+    assert "flexibility_month" not in parsed
+    assert "flexibility_total" not in parsed
+
+
+def test_partial_trpc_errors_do_not_break_existing_fields() -> None:
+    """One failed tRPC batch item should not discard successful sections."""
+    payload = _build_payload(["UP_POWER"])
+    payload[4] = {
+        "error": {
+            "json": {
+                "message": "Current step unavailable",
+                "code": -32004,
+            }
+        }
+    }
+
+    parsed = parse_data(payload)
+
+    assert parsed["flexibility_state"] == "USABLE"
+    assert parsed["flexibility_mode"] == "PARTIAL"
+    assert parsed["flexibility_today"] == 1.0
+    assert parsed["price_consumption_kwh"] == 8.4173
+    assert "flexalgo_battery" not in parsed
+
+
 def test_malformed_prices_do_not_break_existing_fields() -> None:
     """Malformed price payloads should not break the rest of the parse."""
     payload = _build_payload(["UP_POWER"])
