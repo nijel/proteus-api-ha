@@ -276,16 +276,6 @@ class ProteusFlexibilityModeSwitch(ProteusOptimisticSwitch):
         self._attr_unique_id = self._get_unique_id("proteus_switch_flexibility_mode")
         self._attr_icon = "mdi:robot"
 
-    @property
-    def is_on(self) -> bool | None:
-        """Return true if the switch is on (automatic mode)."""
-        if self.coordinator.data is None:
-            return None
-        capabilities = self.coordinator.data.get("flexibility_capabilities")
-        if capabilities is None:
-            return None
-        return capabilities != []
-
     def _get_backend_state(self) -> bool:
         """Return the latest backend state for this control."""
         return self.coordinator.data.get("flexibility_capabilities") != []
