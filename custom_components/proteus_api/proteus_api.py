@@ -49,9 +49,20 @@ class AuthenticationError(Exception):
     """Exception raised for authentication failures."""
 
 
+class ProteusConnectionError(ConnectionError):
+    """Exception raised for Proteus API connection failures."""
+
+
 def format_connection_error(exception: BaseException) -> str:
     """Format transport errors for user-facing Home Assistant retry messages."""
     message = str(exception)
+    cause = exception.__cause__
+    if cause is not None and cause is not exception:
+        cause_message = str(cause) or type(cause).__name__
+        if message and cause_message not in message:
+            return f"Failed to connect to Proteus API: {message} ({cause_message})"
+        if cause_message:
+            return f"Failed to connect to Proteus API: {cause_message}"
     if message:
         return f"Failed to connect to Proteus API: {message}"
     return f"Failed to connect to Proteus API ({type(exception).__name__})"
@@ -650,28 +661,36 @@ class ProteusAPI:
                     f"{API_BASE_URL}{API_LOGIN_ENDPOINT}",
                     json=payload,
                 ) as response:
-                    if response.status == 401:
-                        await self._log_error(response)
-                        await self._reset_session()
-                        raise AuthenticationError("Invalid email or password")
                     if response.status != 200:
-                        error_message = await self._extract_error_message(response)
-                        await self._log_error(response)
-                        await self._reset_session()
-                        if response.status == 400:
-                            raise AuthenticationError(
-                                error_message
-                                or f"Authentication failed (HTTP {response.status})"
-                            )
-                        raise ConnectionError(
-                            error_message
-                            or f"Failed to connect to Proteus API (HTTP {response.status})"
-                        )
-            except (aiohttp.ClientError, TimeoutError) as exception:
+                        await self._raise_login_error(response)
+            except (AuthenticationError, ProteusConnectionError):
+                raise
+            except (aiohttp.ClientError, OSError) as exception:
                 await self._reset_session()
-                raise ConnectionError(format_connection_error(exception)) from exception
+                raise ProteusConnectionError(
+                    format_connection_error(exception)
+                ) from exception
 
         return self._session
+
+    async def _raise_login_error(self, response: aiohttp.ClientResponse) -> None:
+        """Raise the appropriate exception for a failed login response."""
+        if response.status == 401:
+            await self._log_error(response)
+            await self._reset_session()
+            raise AuthenticationError("Invalid email or password")
+
+        error_message = await self._extract_error_message(response)
+        await self._log_error(response)
+        await self._reset_session()
+        if response.status == 400:
+            raise AuthenticationError(
+                error_message or f"Authentication failed (HTTP {response.status})"
+            )
+        raise ProteusConnectionError(
+            error_message
+            or f"Failed to connect to Proteus API (HTTP {response.status})"
+        )
 
     async def _reset_session(self) -> None:
         """Close and discard the current session after login failures."""
@@ -900,122 +919,142 @@ class ProteusAPI:
             )
             return None, True
 
-        async with client.get(
-            f"{API_BASE_URL}{api_endpoint}",
-            params=self._build_inverter_batch_params(endpoints),
-            headers=self.get_headers(),
-        ) as response:
-            response_text = await response.text()
-            payload = self._parse_response_body(response_text)
-            retry_after = self._extract_trpc_rate_limit_retry_after(payload)
+        try:
+            async with client.get(
+                f"{API_BASE_URL}{api_endpoint}",
+                params=self._build_inverter_batch_params(endpoints),
+                headers=self.get_headers(),
+            ) as response:
+                response_text = await response.text()
+                payload = self._parse_response_body(response_text)
+                retry_after = self._extract_trpc_rate_limit_retry_after(payload)
 
-            if response.status == TRPC_RATE_LIMIT_HTTP_STATUS:
-                retry_after = retry_after or UPDATE_INTERVAL
-                self._set_rate_limit_cooldown(retry_after, endpoints)
-                self._log_rate_limit(
-                    retry_after,
-                    self._extract_trpc_error_messages(payload, endpoints)
-                    or [f"HTTP {response.status}"],
-                    scope,
-                )
-                return None, True
+                if response.status == TRPC_RATE_LIMIT_HTTP_STATUS:
+                    retry_after = retry_after or UPDATE_INTERVAL
+                    self._set_rate_limit_cooldown(retry_after, endpoints)
+                    self._log_rate_limit(
+                        retry_after,
+                        self._extract_trpc_error_messages(payload, endpoints)
+                        or [f"HTTP {response.status}"],
+                        scope,
+                    )
+                    return None, True
 
-            if response.status not in {200, 207}:
-                _LOGGER.error(
-                    "API %s request %s failed with status %s (%s)",
-                    response.method,
-                    response.url,
-                    response.status,
-                    payload if payload is not None else response_text,
-                )
-                return None, False
+                if response.status not in {200, 207}:
+                    _LOGGER.error(
+                        "API %s request %s failed with status %s (%s)",
+                        response.method,
+                        response.url,
+                        response.status,
+                        payload if payload is not None else response_text,
+                    )
+                    return None, False
 
-            if payload is None:
-                _LOGGER.error(
-                    "API %s request %s returned an unparsable response",
-                    response.method,
-                    response.url,
-                )
-                return None, False
+                if payload is None:
+                    _LOGGER.error(
+                        "API %s request %s returned an unparsable response",
+                        response.method,
+                        response.url,
+                    )
+                    return None, False
 
-            keep_cached_data = False
-            rate_limit_error_messages = []
-            rate_limit_error_endpoints = []
-            other_error_messages = []
-            for error, endpoint in iter_trpc_errors_with_endpoints(payload, endpoints):
-                message = self._format_trpc_error(error, endpoint)
-                if is_trpc_rate_limit_error(error):
-                    keep_cached_data = True
-                    rate_limit_error_messages.append(message)
-                    if endpoint is not None:
-                        rate_limit_error_endpoints.append(endpoint)
-                else:
-                    other_error_messages.append(message)
+                keep_cached_data = False
+                rate_limit_error_messages = []
+                rate_limit_error_endpoints = []
+                other_error_messages = []
+                for error, endpoint in iter_trpc_errors_with_endpoints(
+                    payload, endpoints
+                ):
+                    message = self._format_trpc_error(error, endpoint)
+                    if is_trpc_rate_limit_error(error):
+                        keep_cached_data = True
+                        rate_limit_error_messages.append(message)
+                        if endpoint is not None:
+                            rate_limit_error_endpoints.append(endpoint)
+                    else:
+                        other_error_messages.append(message)
 
-            if rate_limit_error_messages:
-                retry_after = retry_after or UPDATE_INTERVAL
-                rate_limit_scopes = tuple(rate_limit_error_endpoints) or endpoints
-                self._set_rate_limit_cooldown(retry_after, rate_limit_scopes)
-                self._log_rate_limit(retry_after, rate_limit_error_messages, scope)
+                if rate_limit_error_messages:
+                    retry_after = retry_after or UPDATE_INTERVAL
+                    rate_limit_scopes = tuple(rate_limit_error_endpoints) or endpoints
+                    self._set_rate_limit_cooldown(retry_after, rate_limit_scopes)
+                    self._log_rate_limit(retry_after, rate_limit_error_messages, scope)
 
-            if other_error_messages:
-                _LOGGER.warning(
-                    "API %s request for inverter %s returned partial tRPC errors: %s",
-                    response.method,
-                    self.inverter_id,
-                    "; ".join(other_error_messages),
-                )
+                if other_error_messages:
+                    _LOGGER.warning(
+                        "API %s request for inverter %s returned partial tRPC errors: %s",
+                        response.method,
+                        self.inverter_id,
+                        "; ".join(other_error_messages),
+                    )
 
-            return payload, keep_cached_data
+                return payload, keep_cached_data
+        except ProteusConnectionError:
+            raise
+        except (aiohttp.ClientError, OSError) as exception:
+            raise ProteusConnectionError(
+                format_connection_error(exception)
+            ) from exception
 
     async def fetch_inverters(self) -> list[InverterDict]:
         """Fetch list of inverters available in the API."""
-        client = await self._get_client()
-        params = {
-            "batch": "1",
-            "input": json.dumps(
-                {"0": {"json": None, "meta": {"values": ["undefined"]}}}
-            ),
-        }
-        async with client.get(
-            f"{API_BASE_URL}{API_LIST_ENDPOINT}",
-            params=params,
-            headers=self.get_headers(),
-        ) as response:
-            response_text = await response.text()
-            if not self._is_successful_trpc_response(
-                response,
-                response_text,
-                operation="Inverter discovery",
-            ):
-                error_message = await self._extract_error_message(response)
-                if response.status in {400, 401}:
-                    raise AuthenticationError(
-                        error_message
-                        or f"Inverter discovery failed (HTTP {response.status})"
+        try:
+            client = await self._get_client()
+            params = {
+                "batch": "1",
+                "input": json.dumps(
+                    {"0": {"json": None, "meta": {"values": ["undefined"]}}}
+                ),
+            }
+            async with client.get(
+                f"{API_BASE_URL}{API_LIST_ENDPOINT}",
+                params=params,
+                headers=self.get_headers(),
+            ) as response:
+                response_text = await response.text()
+                if not self._is_successful_trpc_response(
+                    response,
+                    response_text,
+                    operation="Inverter discovery",
+                ):
+                    await self._raise_inverter_discovery_error(response)
+
+                payload = self._parse_response_body(response_text)
+                try:
+                    inverters = cast(
+                        list[InverterDict], payload[0]["result"]["data"]["json"]
                     )
-                raise ConnectionError(
-                    error_message
-                    or f"Failed to fetch inverters (HTTP {response.status})"
-                )
+                except (KeyError, TypeError, IndexError) as exception:
+                    raise ProteusConnectionError(
+                        "Unexpected inverter discovery response"
+                    ) from exception
 
-            payload = self._parse_response_body(response_text)
-            try:
-                inverters = cast(
-                    list[InverterDict], payload[0]["result"]["data"]["json"]
-                )
-            except (KeyError, TypeError, IndexError) as exception:
-                raise ConnectionError(
-                    "Unexpected inverter discovery response"
-                ) from exception
+                for inverter in inverters:
+                    _LOGGER.info(
+                        "Discovered inverter %s (%s)",
+                        inverter["id"],
+                        inverter["vendor"],
+                    )
+                return inverters
+        except (AuthenticationError, ProteusConnectionError):
+            raise
+        except (aiohttp.ClientError, OSError) as exception:
+            raise ProteusConnectionError(
+                format_connection_error(exception)
+            ) from exception
 
-            for inverter in inverters:
-                _LOGGER.info(
-                    "Discovered inverter %s (%s)",
-                    inverter["id"],
-                    inverter["vendor"],
-                )
-            return inverters
+    async def _raise_inverter_discovery_error(
+        self, response: aiohttp.ClientResponse
+    ) -> None:
+        """Raise the appropriate exception for a failed inverter discovery response."""
+        error_message = await self._extract_error_message(response)
+        if response.status in {400, 401}:
+            raise AuthenticationError(
+                error_message or f"Inverter discovery failed (HTTP {response.status})"
+            )
+        raise ProteusConnectionError(
+            error_message or f"Failed to fetch inverters (HTTP {response.status})"
+        )
 
     async def get_data(self) -> dict[str, Any]:
         """Fetch data from Proteus API."""
@@ -1030,7 +1069,7 @@ class ProteusAPI:
             scope="status",
         )
         if status_payload is None and not keep_cached_status:
-            raise ConnectionError("Proteus API status data could not be fetched")
+            raise ProteusConnectionError("Proteus API status data could not be fetched")
 
         if monotonic() >= self._next_price_update:
             _LOGGER.debug("Fetching price data for %s", self.inverter_id)
@@ -1064,7 +1103,9 @@ class ProteusAPI:
                 self._last_data = {**self._last_data, **self._last_price_data}
             return self._last_data
 
-        raise ConnectionError("Proteus API status response did not contain usable data")
+        raise ProteusConnectionError(
+            "Proteus API status response did not contain usable data"
+        )
 
     def _parse_data(self, raw_data: Any) -> dict[str, Any]:
         """Parse raw API data into structured format."""
