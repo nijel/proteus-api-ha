@@ -13,7 +13,7 @@ dependencies = [
 ]
 name = "proteus-api-ha"
 requires-python = ">=3.13"
-version = "0.3.2"
+version = "0.4.0"
 
 [tool.codespell]
 ignore-words-list = "hass"
@@ -23,8 +23,8 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 
 [tool.ruff]
-required-version = ">=0.12.1"
-target-version = "py313"
+required-version = "0.4.0"
+target-version = "0.4.0"
 
 [tool.ruff.lint]
 ignore = [
