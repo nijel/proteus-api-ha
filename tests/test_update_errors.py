@@ -72,12 +72,44 @@ class FailingLoginSession:
         self.instances.append(self)
 
     def post(self, *args: Any, **kwargs: Any) -> Any:
-        """Raise the same transport family as aiohttp connector failures."""
-        raise ClientConnectionError("connection reset")
+        """Return a request context that fails before a response is available."""
+        return FailingRequestContext(ClientConnectionError("connection reset"))
 
     async def close(self) -> None:
         """Record session cleanup."""
         self.closed = True
+
+
+class FailingRequestContext:
+    """Request context manager that fails before yielding a response."""
+
+    def __init__(self, exception: BaseException) -> None:
+        """Initialize with the exception to raise."""
+        self.exception = exception
+
+    async def __aenter__(self) -> Any:
+        """Raise the configured transport failure."""
+        raise self.exception
+
+    async def __aexit__(self, *args: object) -> bool:
+        """Do not suppress exceptions."""
+        return False
+
+
+class FailingRequestClient:
+    """Retry client test double that fails GET transport."""
+
+    def get(self, *args: Any, **kwargs: Any) -> Any:
+        """Return a request context that raises a raw socket reset."""
+        return FailingRequestContext(ConnectionResetError())
+
+
+class DiscoveryFailingProteusAPI(ProteusAPI):
+    """Proteus API client with failing inverter discovery transport."""
+
+    async def _get_client(self) -> FailingRequestClient:
+        """Return a failing retry client test double."""
+        return FailingRequestClient()
 
 
 @pytest.mark.asyncio
@@ -95,6 +127,15 @@ async def test_login_transport_errors_are_connection_errors(monkeypatch) -> None
 
     assert len(FailingLoginSession.instances) == 1
     assert FailingLoginSession.instances[0].closed is True
+
+
+@pytest.mark.asyncio
+async def test_inverter_discovery_transport_errors_are_connection_errors() -> None:
+    """Discovery transport errors should be normalized by the API client."""
+    api = DiscoveryFailingProteusAPI("", "user@example.com", "secret")
+
+    with pytest.raises(ConnectionError, match="ConnectionResetError"):
+        await api.fetch_inverters()
 
 
 @pytest.mark.asyncio
