@@ -106,6 +106,9 @@
       },
       "distribution_tariff": {
         "name": "Distribuční tarif"
+      },
+      "control_plan": {
+        "name": "Plán řízení"
       }
     },
     "binary_sensor": {

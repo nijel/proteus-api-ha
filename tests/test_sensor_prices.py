@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from custom_components.proteus_api.sensor import async_setup_entry
+from custom_components.proteus_api.sensor import async_setup_entry, build_price_list
 
 
 class _FakeCoordinator:
@@ -62,6 +62,32 @@ async def test_price_sensors_are_created_with_expected_values(hass) -> None:
                                     "poze": 0,
                                     "vat_rate": 0.21,
                                 },
+                                "control_plan_id": "plan-1",
+                                "control_plan_created_at": datetime(
+                                    2026, 7, 2, 21, 56, 59, 83000, tzinfo=UTC
+                                ),
+                                "control_plan_steps": [
+                                    {
+                                        "start": "2026-07-02T16:00:00.000Z",
+                                        "duration_minutes": 60,
+                                        "flexalgo_battery": "default",
+                                        "flexalgo_pv": "unrestricted",
+                                        "target_soc": 100,
+                                        "price_consumption_kwh": 6.5941,
+                                        "price_production_kwh": 2.2132,
+                                        "distribution_tariff_type": "HT",
+                                    },
+                                    {
+                                        "start": "2026-07-02T17:00:00.000Z",
+                                        "duration_minutes": 60,
+                                        "flexalgo_battery": "discharge_to_grid",
+                                        "flexalgo_pv": "unrestricted",
+                                        "target_soc": 87,
+                                        "price_consumption_kwh": 7.4404,
+                                        "price_production_kwh": 2.9127,
+                                        "distribution_tariff_type": "HT",
+                                    },
+                                ],
                             }
                         ),
                         "inverter": {"vendor": "VICTRON_ENERGY"},
@@ -94,6 +120,10 @@ async def test_price_sensors_are_created_with_expected_values(hass) -> None:
         "poze": 0,
         "vat_rate": 0.21,
         "price_consumption_mwh": 8417.258278,
+        "price_list": [
+            {"start": "2026-07-02T16:00:00.000Z", "price_kwh": 6.5941},
+            {"start": "2026-07-02T17:00:00.000Z", "price_kwh": 7.4404},
+        ],
     }
 
     production = by_unique_id["proteus_price_production_inv-1"]
@@ -101,7 +131,19 @@ async def test_price_sensors_are_created_with_expected_values(hass) -> None:
     assert production.suggested_display_precision == 2
     assert production.extra_state_attributes == {
         "price_production_mwh": 3711.4218,
+        "price_list": [
+            {"start": "2026-07-02T16:00:00.000Z", "price_kwh": 2.2132},
+            {"start": "2026-07-02T17:00:00.000Z", "price_kwh": 2.9127},
+        ],
     }
+
+    control_plan = by_unique_id["proteus_control_plan_inv-1"]
+    assert control_plan.native_value == 2
+    assert control_plan.extra_state_attributes["plan_id"] == "plan-1"
+    assert control_plan.extra_state_attributes["plan_created_at"] == datetime(
+        2026, 7, 2, 21, 56, 59, 83000, tzinfo=UTC
+    )
+    assert len(control_plan.extra_state_attributes["steps"]) == 2
 
     flexibility = by_unique_id["proteus_flexibility_price_inv-1"]
     assert flexibility.native_value == 9.793
@@ -126,3 +168,21 @@ async def test_price_sensors_are_created_with_expected_values(hass) -> None:
 
     tariff = by_unique_id["proteus_distribution_tariff_type_inv-1"]
     assert tariff.native_value == "HT"
+
+
+def test_build_price_list_extracts_start_and_price() -> None:
+    """Only steps carrying the requested price key should be included."""
+    steps = [
+        {"start": "2026-07-02T16:00:00.000Z", "price_consumption_kwh": 6.5941},
+        {"start": "2026-07-02T17:00:00.000Z"},
+    ]
+
+    assert build_price_list(steps, "price_consumption_kwh") == [
+        {"start": "2026-07-02T16:00:00.000Z", "price_kwh": 6.5941},
+    ]
+
+
+def test_build_price_list_handles_missing_steps() -> None:
+    """A missing or non-list steps value should yield an empty price list."""
+    assert build_price_list(None, "price_consumption_kwh") == []
+    assert build_price_list("not-a-list", "price_consumption_kwh") == []

@@ -18,6 +18,7 @@ from aiohttp_retry import ExponentialRetry, RetryClient
 from .const import (
     API_BASE_URL,
     API_CONTROL_ENDPOINT,
+    API_CONTROL_PLAN_ENDPOINT,
     API_ENABLED_ENDPOINT,
     API_FLEXIBILITY_ENDPOINT,
     API_LIST_ENDPOINT,
@@ -28,6 +29,7 @@ from .const import (
     API_STATUS_ENDPOINT,
     API_STATUS_ENDPOINTS,
     COMMAND_NONE,
+    CONTROL_PLAN_UPDATE_INTERVAL,
     FLEXIBILITY_CAPABILITIES,
     PRICE_UPDATE_DELAY,
     PRICE_UPDATE_INTERVAL,
@@ -553,6 +555,201 @@ def parse_command_payload(command_data: Any) -> dict[str, Any]:
     return parsed
 
 
+def _is_stream_ref_triple(value: Any) -> bool:
+    """Return whether a value is a [path, ref_type, chunk_id] stream reference."""
+    return (
+        isinstance(value, list)
+        and len(value) == 3
+        and isinstance(value[1], int)
+        and isinstance(value[2], int)
+        and (value[0] is None or isinstance(value[0], str))
+    )
+
+
+def _resolve_stream_chunk(
+    chunk_id: int, chunks: dict[int, Any], memo: dict[int, Any]
+) -> Any:
+    """Recursively resolve one chunk of a tRPC jsonl streaming response."""
+    if chunk_id in memo:
+        return memo[chunk_id]
+
+    value, meta = chunks[chunk_id][0][0], None
+    if len(chunks[chunk_id]) > 1:
+        meta = chunks[chunk_id][1]
+
+    resolved = _apply_stream_meta(value, meta, chunks, memo)
+    memo[chunk_id] = resolved
+    return resolved
+
+
+def _apply_stream_meta(
+    value: Any, meta: Any, chunks: dict[int, Any], memo: dict[int, Any]
+) -> Any:
+    """Substitute deferred chunk references into a partially resolved value."""
+    if meta is None or isinstance(meta, dict):
+        # A dict meta is superjson type information (Date/decimal.js/...), which
+        # does not need any further chunk substitution for our purposes.
+        return value
+
+    if _is_stream_ref_triple(meta):
+        triples = [meta]
+    elif (
+        isinstance(meta, list) and meta and all(_is_stream_ref_triple(t) for t in meta)
+    ):
+        triples = meta
+    else:
+        return value
+
+    for path, _ref_type, ref_chunk_id in triples:
+        resolved = _resolve_stream_chunk(ref_chunk_id, chunks, memo)
+        if path is None:
+            value = resolved
+        else:
+            target = value
+            keys = str(path).split(".")
+            for key in keys[:-1]:
+                target = target[key]
+            target[keys[-1]] = resolved
+
+    return value
+
+
+def decode_trpc_stream_response(response_text: str) -> dict[str, Any]:
+    """Decode a tRPC jsonl streaming batch response into resolved root values.
+
+    Unlike the plain batch format (a JSON array with one entry per procedure),
+    some Proteus procedures respond with a jsonl stream where the first line
+    declares placeholders for each batched procedure and subsequent lines
+    progressively resolve deferred chunks referenced by earlier ones.
+    """
+    chunks: dict[int, Any] = {}
+    root_keys: list[str] = []
+
+    for line in response_text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+
+        payload = json.loads(line)["json"]
+        if isinstance(payload, dict):
+            for key, cell in payload.items():
+                chunks[int(key)] = cell
+                root_keys.append(key)
+        elif isinstance(payload, list) and len(payload) == 3:
+            chunk_id, _status, cell = payload
+            chunks[chunk_id] = cell
+
+    memo: dict[int, Any] = {}
+    return {key: _resolve_stream_chunk(int(key), chunks, memo) for key in root_keys}
+
+
+def get_trpc_stream_result_json(
+    resolved_roots: dict[str, Any], position: int
+) -> Any | None:
+    """Return one resolved result from a decoded tRPC jsonl streaming response."""
+    try:
+        return resolved_roots[str(position)]["result"]["data"]
+    except (KeyError, TypeError):
+        return None
+
+
+def parse_control_plan_step(step: Any) -> dict[str, Any] | None:
+    """Parse one control plan step into HA-friendly fields."""
+    if not isinstance(step, dict):
+        return None
+
+    metadata = step.get("metadata")
+    if not isinstance(metadata, dict):
+        return None
+
+    parsed: dict[str, Any] = {
+        "start": step.get("startAt"),
+        "duration_minutes": step.get("durationMinutes"),
+        "flexalgo_battery": metadata.get("flexalgoBattery"),
+        "flexalgo_pv": metadata.get("flexalgoPv"),
+        "target_soc": metadata.get("targetSoC"),
+        "is_prediction": metadata.get("isPrediction"),
+    }
+
+    price_consumption_mwh = metadata.get("priceMwhConsumption")
+    if is_number(price_consumption_mwh):
+        parsed["price_consumption_kwh"] = round(price_consumption_mwh / 1000, 4)
+
+    price_production_mwh = metadata.get("priceMwhProduction")
+    if is_number(price_production_mwh):
+        parsed["price_production_kwh"] = round(price_production_mwh / 1000, 4)
+
+    price_components = metadata.get("priceComponents")
+    if isinstance(price_components, dict):
+        distribution_tariff_type = price_components.get("distributionTariffType")
+        if distribution_tariff_type is not None:
+            parsed["distribution_tariff_type"] = distribution_tariff_type
+
+    return {key: value for key, value in parsed.items() if value is not None}
+
+
+def parse_control_plan_payload(control_plan_data: Any) -> dict[str, Any]:
+    """Parse a controlPlans.active response into HA-friendly fields."""
+    parsed: dict[str, Any] = {}
+    if not isinstance(control_plan_data, dict):
+        return parsed
+
+    active_plan = control_plan_data.get("activePlan")
+    if not isinstance(active_plan, dict):
+        return parsed
+
+    payload = active_plan.get("payload")
+    raw_steps = payload.get("steps") if isinstance(payload, dict) else None
+    if isinstance(raw_steps, list):
+        steps = [
+            step
+            for step in (parse_control_plan_step(raw_step) for raw_step in raw_steps)
+            if step is not None
+        ]
+        if steps:
+            parsed["control_plan_steps"] = steps
+
+    if active_plan.get("id") is not None:
+        parsed["control_plan_id"] = active_plan.get("id")
+
+    plan_created_at = parse_optional_datetime(active_plan.get("createdAt"))
+    if plan_created_at is not None:
+        parsed["control_plan_created_at"] = plan_created_at
+
+    return parsed
+
+
+def parse_control_plan_response(response_text: str) -> dict[str, Any]:
+    """Parse a controlPlans.active batch response in either wire format."""
+    if not response_text:
+        return {}
+
+    stream_control_plan = _parse_streamed_control_plan(response_text)
+    if stream_control_plan:
+        return stream_control_plan
+
+    try:
+        payload = json.loads(response_text)
+    except JSONDecodeError:
+        return {}
+
+    if isinstance(payload, list):
+        return parse_control_plan_payload(get_trpc_result_json(payload, 0))
+
+    return {}
+
+
+def _parse_streamed_control_plan(response_text: str) -> dict[str, Any]:
+    """Parse a controlPlans.active response using the jsonl streaming format."""
+    try:
+        resolved_roots = decode_trpc_stream_response(response_text)
+    except (JSONDecodeError, KeyError, TypeError, IndexError, ValueError):
+        return {}
+
+    control_plan_data = get_trpc_stream_result_json(resolved_roots, 0)
+    return parse_control_plan_payload(control_plan_data)
+
+
 def parse_current_step_payload(current_step: Any) -> dict[str, Any]:
     """Parse current flexalgo step metadata fields."""
     parsed: dict[str, Any] = {}
@@ -613,6 +810,8 @@ class ProteusAPI:
         self._last_data: dict[str, Any] | None = None
         self._last_price_data: dict[str, Any] | None = None
         self._next_price_update = 0.0
+        self._last_control_plan_data: dict[str, Any] | None = None
+        self._next_control_plan_update = 0.0
         self._account_key = (self.tenant, self.email.strip().casefold())
 
     def get_headers(self, *, for_post: bool = False) -> dict[str, str]:
@@ -1089,23 +1288,109 @@ class ProteusAPI:
                 retry_after = self._get_rate_limit_remaining(API_PRICE_ENDPOINTS)
                 self._next_price_update = monotonic() + (retry_after or UPDATE_INTERVAL)
 
+        if monotonic() >= self._next_control_plan_update:
+            _LOGGER.debug("Fetching control plan for %s", self.inverter_id)
+            control_plan_data = await self._fetch_control_plan_safely()
+            if control_plan_data:
+                self._last_control_plan_data = control_plan_data
+                self._next_control_plan_update = (
+                    monotonic() + CONTROL_PLAN_UPDATE_INTERVAL
+                )
+            else:
+                retry_after = self._get_rate_limit_remaining(
+                    (API_CONTROL_PLAN_ENDPOINT,)
+                )
+                self._next_control_plan_update = monotonic() + (
+                    retry_after or UPDATE_INTERVAL
+                )
+
         data = self._parse_data(status_payload) if status_payload is not None else {}
         if data:
             if keep_cached_status and self._last_data is not None:
                 data = {**self._last_data, **data}
             if self._last_price_data is not None:
                 data = {**data, **self._last_price_data}
+            if self._last_control_plan_data is not None:
+                data = {**data, **self._last_control_plan_data}
             self._last_data = data
             return data
 
         if keep_cached_status and self._last_data is not None:
             if self._last_price_data is not None:
                 self._last_data = {**self._last_data, **self._last_price_data}
+            if self._last_control_plan_data is not None:
+                self._last_data = {**self._last_data, **self._last_control_plan_data}
             return self._last_data
 
         raise ProteusConnectionError(
             "Proteus API status response did not contain usable data"
         )
+
+    async def _fetch_control_plan_safely(self) -> dict[str, Any]:
+        """Fetch the active control plan, tolerating failures."""
+        rate_limit_remaining = self._get_rate_limit_remaining(
+            (API_CONTROL_PLAN_ENDPOINT,)
+        )
+        if rate_limit_remaining:
+            _LOGGER.debug(
+                "Skipping Proteus API control plan refresh for inverter %s; "
+                "server rate-limit cooldown has %s seconds remaining",
+                self.inverter_id,
+                rate_limit_remaining,
+            )
+            return {}
+
+        try:
+            return await self.fetch_control_plan()
+        except ProteusConnectionError as exception:
+            _LOGGER.warning(
+                "Could not fetch control plan for %s: %s",
+                self.inverter_id,
+                exception,
+            )
+            return {}
+
+    async def fetch_control_plan(self) -> dict[str, Any]:
+        """Fetch the active control plan for this inverter."""
+        client = await self._get_client()
+
+        try:
+            async with client.get(
+                f"{API_BASE_URL}{API_CONTROL_PLAN_ENDPOINT}",
+                params=self._build_inverter_batch_params((API_CONTROL_PLAN_ENDPOINT,)),
+                headers=self.get_headers(),
+            ) as response:
+                response_text = await response.text()
+
+                if response.status == TRPC_RATE_LIMIT_HTTP_STATUS:
+                    retry_after = (
+                        self._extract_trpc_rate_limit_retry_after(
+                            self._parse_response_body(response_text)
+                        )
+                        or UPDATE_INTERVAL
+                    )
+                    self._set_rate_limit_cooldown(
+                        retry_after, (API_CONTROL_PLAN_ENDPOINT,)
+                    )
+                    return {}
+
+                if response.status not in {200, 207}:
+                    _LOGGER.error(
+                        "API %s request %s failed with status %s (%s)",
+                        response.method,
+                        response.url,
+                        response.status,
+                        response_text,
+                    )
+                    return {}
+        except ProteusConnectionError:
+            raise
+        except (aiohttp.ClientError, OSError) as exception:
+            raise ProteusConnectionError(
+                format_connection_error(exception)
+            ) from exception
+
+        return parse_control_plan_response(response_text)
 
     def _parse_data(self, raw_data: Any) -> dict[str, Any]:
         """Parse raw API data into structured format."""

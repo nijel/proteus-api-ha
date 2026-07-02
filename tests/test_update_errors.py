@@ -29,6 +29,7 @@ class StubProteusAPI(ProteusAPI):
         self.status_exception: Exception | None = None
         self.status_result: tuple[Any | None, bool] = ([], False)
         self._next_price_update = float("inf")
+        self._next_control_plan_update = float("inf")
 
     def set_cached_data(self, data: dict[str, Any]) -> None:
         """Set the cached status data."""

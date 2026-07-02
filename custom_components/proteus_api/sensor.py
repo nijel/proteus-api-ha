@@ -88,6 +88,9 @@ async def async_setup_entry(
                 ProteusDistributionTariffTypeSensor(
                     coordinator, config_entry, inverter_id, inverter
                 ),
+                ProteusControlPlanSensor(
+                    coordinator, config_entry, inverter_id, inverter
+                ),
             ]
         )
 
@@ -638,15 +641,24 @@ class ProteusConsumptionPriceSensor(ProteusBaseSensor):
         return self.coordinator.data.get("price_consumption_kwh")
 
     @property
-    def extra_state_attributes(self) -> dict[str, float | str] | None:
+    def extra_state_attributes(self) -> dict[str, Any] | None:
         """Return the current distribution price breakdown."""
         if self.coordinator.data is None:
             return None
 
-        attributes = dict(self.coordinator.data.get("price_components") or {})
+        attributes: dict[str, Any] = dict(
+            self.coordinator.data.get("price_components") or {}
+        )
         price_consumption_mwh = self.coordinator.data.get("price_consumption_mwh")
         if price_consumption_mwh is not None:
             attributes["price_consumption_mwh"] = price_consumption_mwh
+
+        price_list = build_price_list(
+            self.coordinator.data.get("control_plan_steps"),
+            "price_consumption_kwh",
+        )
+        if price_list:
+            attributes["price_list"] = price_list
 
         if not attributes:
             return None
@@ -676,15 +688,86 @@ class ProteusProductionPriceSensor(ProteusBaseSensor):
         return self.coordinator.data.get("price_production_kwh")
 
     @property
-    def extra_state_attributes(self) -> dict[str, float | str] | None:
+    def extra_state_attributes(self) -> dict[str, Any] | None:
         """Return the current production price details."""
         if self.coordinator.data is None:
             return None
 
-        attributes = {}
+        attributes: dict[str, Any] = {}
         price_production_mwh = self.coordinator.data.get("price_production_mwh")
         if price_production_mwh is not None:
             attributes["price_production_mwh"] = price_production_mwh
+
+        price_list = build_price_list(
+            self.coordinator.data.get("control_plan_steps"),
+            "price_production_kwh",
+        )
+        if price_list:
+            attributes["price_list"] = price_list
+
+        if not attributes:
+            return None
+
+        return attributes
+
+
+def build_price_list(steps: Any, price_key: str) -> list[dict[str, Any]]:
+    """Build a start/price list for a given price key from control plan steps."""
+    if not isinstance(steps, list):
+        return []
+
+    price_list = []
+    for step in steps:
+        if not isinstance(step, dict):
+            continue
+        price = step.get(price_key)
+        if price is None:
+            continue
+        price_list.append({"start": step.get("start"), "price_kwh": price})
+
+    return price_list
+
+
+class ProteusControlPlanSensor(ProteusBaseSensor):
+    """Control plan schedule sensor."""
+
+    _attr_translation_key = "control_plan"
+    _attr_icon = "mdi:calendar-clock"
+
+    def __init__(self, coordinator, config_entry, inverter_id, inverter):
+        """Initialize the sensor."""
+        super().__init__(coordinator, config_entry, inverter_id, inverter)
+        self._attr_unique_id = self._get_unique_id("proteus_control_plan")
+
+    @property
+    def native_value(self) -> int | None:
+        """Return the number of steps in the active control plan."""
+        if self.coordinator.data is None:
+            return None
+        steps = self.coordinator.data.get("control_plan_steps")
+        if steps is None:
+            return None
+        return len(steps)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Return the full control plan schedule."""
+        if self.coordinator.data is None:
+            return None
+
+        attributes: dict[str, Any] = {}
+
+        steps = self.coordinator.data.get("control_plan_steps")
+        if steps is not None:
+            attributes["steps"] = steps
+
+        plan_id = self.coordinator.data.get("control_plan_id")
+        if plan_id is not None:
+            attributes["plan_id"] = plan_id
+
+        plan_created_at = self.coordinator.data.get("control_plan_created_at")
+        if plan_created_at is not None:
+            attributes["plan_created_at"] = plan_created_at
 
         if not attributes:
             return None

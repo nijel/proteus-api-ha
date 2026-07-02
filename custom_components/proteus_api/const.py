@@ -21,6 +21,9 @@ API_ENABLED_ENDPOINT = "inverters.controls.updateControlEnabled"
 API_MODE_ENDPOINT = "inverters.controls.updateControlMode"
 API_FLEXIBILITY_ENDPOINT = "inverters.controls.updateFlexibilityCapabilities"
 API_LOGIN_ENDPOINT = "users.loginWithEmailAndPassword"
+API_CONTROL_PLAN_ENDPOINT = "controlPlans.active"
+
+CONTROL_PLAN_UPDATE_INTERVAL = 15 * 60
 
 # Control types
 CONTROL_TYPES = [

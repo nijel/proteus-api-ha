@@ -71,10 +71,12 @@ Integrace automaticky objeví všechny invertory dostupné ve vašem účtu a vy
 - `sensor.proteus_odhad_vyroby` - Předpovězená výroba
 - `sensor.proteus_odhad_spotreby` - Předpovězená spotřeba
 - `sensor.proteus_cena_spotreby` - Aktuální cena spotřeby v Kč/kWh
-  - atributy: `price_consumption_mwh`, `price_mwh`, `distribution_price`, `distribution_tariff_type`, `fee_electricity_buy`, `fee_electricity_sell`, `tax_electricity`, `system_services`, `poze`, `vat_rate`
+  - atributy: `price_consumption_mwh`, `price_mwh`, `distribution_price`, `distribution_tariff_type`, `fee_electricity_buy`, `fee_electricity_sell`, `tax_electricity`, `system_services`, `poze`, `vat_rate`, `price_list` (kompletní ceník spotřeby na aktuální a další den, pole objektů `{start, price_kwh}`)
 - `sensor.proteus_cena_vyroby` - Aktuální cena výroby v Kč/kWh
-  - atributy: `price_production_mwh`
+  - atributy: `price_production_mwh`, `price_list` (kompletní ceník výroby na aktuální a další den, pole objektů `{start, price_kwh}`)
 - `sensor.proteus_distribucni_tarif` - Aktuální distribuční tarif (`HT` = High tariff, `LT` = Low tariff)
+- `sensor.proteus_plan_rizeni` - Počet kroků v aktivním plánu řízení
+  - atributy: `steps` (celý plán řízení - pole kroků s `start`, `duration_minutes`, `flexalgo_battery`, `flexalgo_pv`, `target_soc`, `is_prediction`, `price_consumption_kwh`, `price_production_kwh`, `distribution_tariff_type`), `plan_id`, `plan_created_at`
 
 ### Binární sensory
 
