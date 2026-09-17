@@ -97,6 +97,51 @@ Integrace automaticky objeví všechny invertory dostupné ve vašem účtu a vy
 - `switch.proteus_zakaz_pretoku` - Ovládání zákazu přetoků
 - `switch.proteus_rizeni_fve` - Povolení řízení FVE
 
+## Služby
+
+### `proteus_api.set_predictions`
+
+Přepíše předpověď spotřeby a/nebo výroby, se kterou plánuje optimalizační algoritmus Protea (stejná funkce jako ruční úprava v Proteovi na stránce plánu). Užitečné, když má člověk vlastní, přesnější předpověď (např. Solcast) nebo ví o něčem, co Proteus vědět nemůže.
+
+Cíl služby je zařízení (invertor); bez cíle se předpověď zapíše všem nakonfigurovaným invertorům.
+
+Pole `predictions` je seznam hodinových hodnot, každá položka obsahuje:
+
+- `time` - začátek hodiny (naivní čas se bere v časové zóně Home Assistantu)
+- `consumption_kwh` - předpokládaná spotřeba za tu hodinu v kWh (volitelné)
+- `production_kwh` - předpokládaná výroba FVE za tu hodinu v kWh (volitelné)
+
+Aspoň jedna z hodnot musí být uvedená. Vynechaná veličina zůstane na předpovědi Protea, takže jde přepsat třeba jen výrobu a spotřebu nechat na Proteovi.
+
+```yaml
+action: proteus_api.set_predictions
+target:
+  device_id: 0123456789abcdef0123456789abcdef
+data:
+  predictions:
+    - time: "2026-08-09T19:00:00"
+      consumption_kwh: 0.7
+      production_kwh: 0.3
+    - time: "2026-08-09T20:00:00"
+      production_kwh: 0.0
+```
+
+### `proteus_api.clear_predictions`
+
+Zruší přepsané předpovědi pro dané hodiny; Proteus pak zase plánuje podle svých vlastních (stejné jako tlačítko reset v Proteovi). Cíl služby je stejný jako u `set_predictions`.
+
+Pole `times` je seznam začátků hodin, u kterých se má přepis odstranit.
+
+```yaml
+action: proteus_api.clear_predictions
+target:
+  device_id: 0123456789abcdef0123456789abcdef
+data:
+  times:
+    - "2026-08-09T19:00:00"
+    - "2026-08-09T20:00:00"
+```
+
 ## Vývoj
 
 Projekt používá `uv` a závislosti pro testy jsou definované v `pyproject.toml`.

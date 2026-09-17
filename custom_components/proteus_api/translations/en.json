@@ -155,5 +155,27 @@
       }
     }
   },
+  "services": {
+    "set_predictions": {
+      "name": "Set predictions",
+      "description": "Overrides the consumption and/or production predictions the Proteus algorithm plans with. A quantity left out keeps the Proteus prediction.",
+      "fields": {
+        "predictions": {
+          "name": "Predictions",
+          "description": "List of hourly overrides. Every item needs time (start of the hour) and at least one of consumption_kwh or production_kwh."
+        }
+      }
+    },
+    "clear_predictions": {
+      "name": "Clear predictions",
+      "description": "Removes prediction overrides so Proteus plans with its own predictions again.",
+      "fields": {
+        "times": {
+          "name": "Times",
+          "description": "List of hour starts whose overrides should be removed."
+        }
+      }
+    }
+  },
   "title": "Proteus API"
 }
