@@ -155,5 +155,27 @@
       }
     }
   },
+  "services": {
+    "set_predictions": {
+      "name": "Nastavit předpovědi",
+      "description": "Přepíše předpověď spotřeby a/nebo výroby, se kterou plánuje algoritmus Protea. Vynechaná veličina zůstane na předpovědi Protea.",
+      "fields": {
+        "predictions": {
+          "name": "Předpovědi",
+          "description": "Seznam hodinových hodnot. Každá položka potřebuje time (začátek hodiny) a aspoň jedno z consumption_kwh nebo production_kwh."
+        }
+      }
+    },
+    "clear_predictions": {
+      "name": "Zrušit předpovědi",
+      "description": "Odstraní přepsané předpovědi, Proteus pak zase plánuje podle svých vlastních.",
+      "fields": {
+        "times": {
+          "name": "Časy",
+          "description": "Seznam začátků hodin, u kterých se má přepis odstranit."
+        }
+      }
+    }
+  },
   "title": "Proteus API"
 }

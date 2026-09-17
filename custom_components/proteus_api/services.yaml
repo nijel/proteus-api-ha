@@ -1,0 +1,28 @@
+set_predictions:
+  target:
+    device:
+      integration: proteus_api
+  fields:
+    predictions:
+      required: true
+      example: |-
+        - time: "2026-08-09T19:00:00"
+          consumption_kwh: 0.7
+          production_kwh: 0.3
+        - time: "2026-08-09T20:00:00"
+          consumption_kwh: 0.9
+      selector:
+        object:
+
+clear_predictions:
+  target:
+    device:
+      integration: proteus_api
+  fields:
+    times:
+      required: true
+      example: |-
+        - "2026-08-09T19:00:00"
+        - "2026-08-09T20:00:00"
+      selector:
+        object:

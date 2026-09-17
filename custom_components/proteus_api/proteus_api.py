@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 import json
 from json import JSONDecodeError
 import logging
@@ -24,6 +24,7 @@ from .const import (
     API_LIST_ENDPOINT,
     API_LOGIN_ENDPOINT,
     API_MODE_ENDPOINT,
+    API_PREDICTIONS_OVERRIDE_ENDPOINT,
     API_PRICE_ENDPOINT,
     API_PRICE_ENDPOINTS,
     API_STATUS_ENDPOINT,
@@ -814,6 +815,47 @@ def parse_data(raw_data: Any) -> dict[str, Any]:
     return parsed
 
 
+def format_prediction_time(value: datetime) -> str:
+    """Format a prediction timestamp the way superjson serializes a Date."""
+    utc_value = value.astimezone(UTC) if value.tzinfo else value.replace(tzinfo=UTC)
+    milliseconds = utc_value.microsecond // 1000
+    return f"{utc_value.strftime('%Y-%m-%dT%H:%M:%S')}.{milliseconds:03d}Z"
+
+
+def build_prediction_overrides_payload(
+    inverter_id: str, predictions: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """Build the batched tRPC payload for a prediction override upsert.
+
+    The API expects superjson-encoded input, so every ``time`` value has to be
+    declared as a ``Date`` in the request metadata; sending it without that
+    annotation makes the server treat the timestamp as a plain string.
+
+    A missing or ``None`` value is sent as JSON ``null``, which tells Proteus
+    to fall back to its own prediction for that quantity. An entry with both
+    values ``None`` therefore clears the override for that hour, which is how
+    the Proteus web UI resets a manual edit.
+    """
+    entries = []
+    meta_values: dict[str, list[str]] = {}
+    for index, prediction in enumerate(predictions):
+        entries.append(
+            {
+                "time": format_prediction_time(prediction["time"]),
+                "consumptionEnergyKwh": prediction.get("consumption_kwh"),
+                "photovoltaicEnergyKwh": prediction.get("production_kwh"),
+            }
+        )
+        meta_values[f"predictions.{index}.time"] = ["Date"]
+
+    return {
+        "0": {
+            "json": {"inverterId": inverter_id, "predictions": entries},
+            "meta": {"values": meta_values},
+        }
+    }
+
+
 class ProteusAPI:
     """Proteus API client."""
 
@@ -1575,6 +1617,50 @@ class ProteusAPI:
         except Exception:
             _LOGGER.exception("Error updating flexibility mode")
             return False
+
+    async def upsert_prediction_overrides(
+        self, predictions: list[dict[str, Any]]
+    ) -> bool:
+        """Override the predicted consumption and production for given hours.
+
+        A ``None`` value keeps the Proteus prediction for that quantity.
+        """
+        try:
+            client = await self._get_client()
+
+            payload = build_prediction_overrides_payload(self.inverter_id, predictions)
+            _LOGGER.debug(
+                "Overriding %s prediction(s) for %s: %s",
+                len(predictions),
+                self.inverter_id,
+                payload,
+            )
+
+            async with client.post(
+                f"{API_BASE_URL}{API_PREDICTIONS_OVERRIDE_ENDPOINT}?batch=1",
+                json=payload,
+                headers=self.get_headers(for_post=True),
+            ) as response:
+                data = await response.text()
+                _LOGGER.debug("Response data: %s", data)
+                return self._is_successful_trpc_response(
+                    response,
+                    data,
+                    operation="Prediction override update",
+                )
+
+        except Exception:
+            _LOGGER.exception("Error updating prediction overrides")
+            return False
+
+    async def clear_prediction_overrides(self, times: list[datetime]) -> bool:
+        """Remove prediction overrides for given hours."""
+        return await self.upsert_prediction_overrides(
+            [
+                {"time": time, "consumption_kwh": None, "production_kwh": None}
+                for time in times
+            ]
+        )
 
     async def close(self) -> None:
         """Close the session."""
