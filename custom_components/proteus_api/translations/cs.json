@@ -158,21 +158,41 @@
   "services": {
     "set_predictions": {
       "name": "Nastavit předpovědi",
-      "description": "Přepíše předpověď spotřeby a/nebo výroby, se kterou plánuje algoritmus Protea. Vynechaná veličina zůstane na předpovědi Protea.",
+      "description": "Přepíše předpověď spotřeby a/nebo výroby, se kterou plánuje algoritmus Protea. Vynechaná veličina zůstane na předpovědi Protea. Přepočet plánu probíhá na pozadí.",
       "fields": {
         "predictions": {
           "name": "Předpovědi",
-          "description": "Seznam hodinových hodnot. Každá položka potřebuje time (začátek hodiny) a aspoň jedno z consumption_kwh nebo production_kwh."
+          "description": "Seznam hodinových hodnot. Každá položka potřebuje time (začátek hodiny) a aspoň jedno z consumption_kwh nebo production_kwh. Nejvýše 96 unikátních hodin."
         }
       }
     },
     "clear_predictions": {
       "name": "Zrušit předpovědi",
-      "description": "Odstraní přepsané předpovědi, Proteus pak zase plánuje podle svých vlastních.",
+      "description": "Odstraní přepsané předpovědi, Proteus pak zase plánuje podle svých vlastních. Přepočet plánu probíhá na pozadí.",
       "fields": {
         "times": {
           "name": "Časy",
-          "description": "Seznam začátků hodin, u kterých se má přepis odstranit."
+          "description": "Seznam začátků hodin, u kterých se má přepis odstranit. Nejvýše 96 unikátních hodin."
+        }
+      }
+    },
+    "set_plan_steps": {
+      "name": "Upravit kroky plánu",
+      "description": "Upraví vybrané hodiny plánu baterie a FVE. Vyžaduje právě jeden invertor. Ostatní hodiny se zachovají; dřívější hodiny server zamkne. Přepočet probíhá na pozadí.",
+      "fields": {
+        "steps": {
+          "name": "Kroky",
+          "description": "Seznam položek s time a alespoň jedním polem flexalgo_battery, flexalgo_pv, target_soc (0–100 nebo null), is_manually_locked. Vynechaná pole zůstanou beze změny."
+        }
+      }
+    },
+    "clear_plan_steps": {
+      "name": "Zrušit úpravy plánu",
+      "description": "Zruší ruční příznaky vybraných hodin pro právě jeden invertor. Pozdější upravené hodiny mohou dřívější hodiny nadále zamykat. Přepočet probíhá na pozadí.",
+      "fields": {
+        "times": {
+          "name": "Časy",
+          "description": "Seznam začátků hodin v aktuálním plánu."
         }
       }
     }

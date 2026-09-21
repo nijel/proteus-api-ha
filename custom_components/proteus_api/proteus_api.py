@@ -10,6 +10,8 @@ from math import ceil
 import re
 from time import monotonic, time
 from typing import Any, ClassVar, TypedDict, cast
+from uuid import uuid4
+from weakref import WeakValueDictionary
 
 import aiohttp
 from aiohttp.client_exceptions import ClientConnectionError
@@ -24,11 +26,13 @@ from .const import (
     API_LIST_ENDPOINT,
     API_LOGIN_ENDPOINT,
     API_MODE_ENDPOINT,
+    API_PLAN_CAPABILITIES_ENDPOINT,
     API_PREDICTIONS_OVERRIDE_ENDPOINT,
     API_PRICE_ENDPOINT,
     API_PRICE_ENDPOINTS,
     API_STATUS_ENDPOINT,
     API_STATUS_ENDPOINTS,
+    API_UPDATE_PLAN_ENDPOINT,
     COMMAND_NONE,
     CONTROL_PLAN_UPDATE_INTERVAL,
     FLEXIBILITY_CAPABILITIES,
@@ -37,8 +41,17 @@ from .const import (
     TID_DELTA_GREEN,
     UPDATE_INTERVAL,
 )
+from .plan import (
+    PlanWriteState,
+    build_plan_payload,
+    diagnostic_snapshot,
+    grid_overflow_enabled,
+    validate_capabilities,
+    validate_times,
+)
 
 _LOGGER = logging.getLogger(__name__)
+_DIAGNOSTICS = logging.getLogger("custom_components.proteus_api.plan_diagnostics")
 
 TRPC_RATE_LIMIT_CODE = -32029
 TRPC_RATE_LIMIT_HTTP_STATUS = 429
@@ -432,6 +445,8 @@ def parse_detail_payload(detail: Any) -> dict[str, Any]:
     )
     if flexibility_state is not None:
         parsed["flexibility_state"] = flexibility_state
+    if isinstance(detail.get("gridOverflowEnabled"), bool):
+        parsed["grid_overflow_enabled"] = grid_overflow_enabled(detail)
     if detail.get("controlMode") is not None:
         parsed["control_mode"] = detail.get("controlMode")
     if detail.get("controlEnabled") is not None:
@@ -574,9 +589,17 @@ def _resolve_stream_chunk(
     if chunk_id in memo:
         return memo[chunk_id]
 
-    value, meta = chunks[chunk_id][0][0], None
-    if len(chunks[chunk_id]) > 1:
-        meta = chunks[chunk_id][1]
+    cell = chunks[chunk_id]
+    if (
+        not isinstance(cell, list)
+        or not cell
+        or not isinstance(cell[0], list)
+        or len(cell[0]) > 1
+    ):
+        raise ValueError("Invalid tRPC stream value")
+    # tRPC encodes a fulfilled undefined (void mutation result) as [[]].
+    value = cell[0][0] if cell[0] else None
+    meta = cell[1:] or None
 
     resolved = _apply_stream_meta(value, meta, chunks, memo)
     memo[chunk_id] = resolved
@@ -637,7 +660,9 @@ def decode_trpc_stream_response(response_text: str) -> dict[str, Any]:
                 chunks[int(key)] = cell
                 root_keys.append(key)
         elif isinstance(payload, list) and len(payload) == 3:
-            chunk_id, _status, cell = payload
+            chunk_id, status, cell = payload
+            if status != 0:
+                raise ValueError("Rejected tRPC stream result")
             chunks[chunk_id] = cell
 
     memo: dict[int, Any] = {}
@@ -657,6 +682,66 @@ def get_trpc_stream_result_json(
     return data
 
 
+def single_result_envelope(response_text: str) -> dict[str, Any]:
+    """Resolve a single batched result while preserving null successful results."""
+    try:
+        payload = json.loads(response_text)
+        if (
+            isinstance(payload, list)
+            and len(payload) == 1
+            and isinstance(payload[0], dict)
+        ):
+            return payload[0]
+    except (JSONDecodeError, TypeError):
+        pass
+    try:
+        envelope = decode_trpc_stream_response(response_text).get("0", {})
+        return envelope if isinstance(envelope, dict) else {}
+    except (JSONDecodeError, KeyError, TypeError, IndexError, ValueError):
+        return {}
+
+
+def write_response_diagnostic(response_text: str) -> Any:
+    """Retain wire structure for debugging while removing response string values."""
+
+    def redact(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {key: redact(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [redact(item) for item in value]
+        if isinstance(value, str) and value not in (
+            "result",
+            "data",
+            "undefined",
+            "Date",
+        ):
+            return "<redacted>"
+        return value
+
+    try:
+        return [
+            redact(json.loads(line))
+            for line in response_text.splitlines()
+            if line.strip()
+        ]
+    except (JSONDecodeError, TypeError):
+        return {"unparsed": True, "length": len(response_text)}
+
+
+def has_single_result(response_text: str) -> bool:
+    """Distinguish a successful result from an empty or malformed HTTP 200."""
+    result = single_result_envelope(response_text).get("result")
+    return isinstance(result, dict) and "data" in result
+
+
+def decode_single_result(response_text: str) -> Any:
+    """Extract plain or streamed result data without changing absent optional values."""
+    envelope = single_result_envelope(response_text)
+    result = envelope.get("result")
+    data = result.get("data") if isinstance(result, dict) else None
+    return data.get("json") if isinstance(data, dict) and "json" in data else data
+
+
 def parse_control_plan_step(step: Any) -> dict[str, Any] | None:
     """Parse one control plan step into HA-friendly fields."""
     if not isinstance(step, dict):
@@ -674,6 +759,20 @@ def parse_control_plan_step(step: Any) -> dict[str, Any] | None:
         "target_soc": metadata.get("targetSoC"),
         "is_prediction": metadata.get("isPrediction"),
     }
+
+    for source, target in {
+        "manuallyEdited": "manually_edited",
+        "manuallyLocked": "manually_locked",
+        "locked": "locked",
+        "predictedConsumption": "predicted_consumption",
+        "predictedProduction": "predicted_production",
+        "hasEditedPredictions": "has_edited_predictions",
+        "originalFlexalgoBattery": "original_flexalgo_battery",
+        "originalFlexalgoPv": "original_flexalgo_pv",
+        "originalTargetSoC": "original_target_soc",
+    }.items():
+        if source in metadata:
+            parsed[target] = metadata[source]
 
     price_consumption_mwh = metadata.get("priceMwhConsumption")
     if is_number(price_consumption_mwh):
@@ -698,8 +797,15 @@ def parse_control_plan_payload(control_plan_data: Any) -> dict[str, Any]:
     if not isinstance(control_plan_data, dict):
         return parsed
 
+    if isinstance(control_plan_data.get("isRecalculatingPlan"), bool):
+        parsed["is_recalculating_plan"] = control_plan_data["isRecalculatingPlan"]
+    overflow = grid_overflow_enabled(control_plan_data.get("inverter"))
+    if overflow is not None:
+        parsed["grid_overflow_enabled"] = overflow
     if "activePlan" in control_plan_data and control_plan_data["activePlan"] is None:
         return {
+            **parsed,
+            "control_plan_household_id": None,
             "control_plan_steps": [],
             "control_plan_id": None,
             "control_plan_created_at": None,
@@ -707,10 +813,16 @@ def parse_control_plan_payload(control_plan_data: Any) -> dict[str, Any]:
 
     active_plan = control_plan_data.get("activePlan")
     if not isinstance(active_plan, dict):
-        return parsed
+        return {}
 
     payload = active_plan.get("payload")
-    raw_steps = payload.get("steps") if isinstance(payload, dict) else None
+    raw_steps = active_plan.get("stepsWithFlexibility")
+    if "stepsWithFlexibility" not in active_plan:
+        raw_steps = payload.get("steps") if isinstance(payload, dict) else None
+    if not isinstance(raw_steps, list):
+        return {}
+    if active_plan.get("householdId"):
+        parsed["control_plan_household_id"] = active_plan["householdId"]
     if isinstance(raw_steps, list):
         steps = [
             step
@@ -836,6 +948,7 @@ def build_prediction_overrides_payload(
     values ``None`` therefore clears the override for that hour, which is how
     the Proteus web UI resets a manual edit.
     """
+    validate_times([item["time"] for item in predictions], maximum=96)
     entries = []
     meta_values: dict[str, list[str]] = {}
     for index, prediction in enumerate(predictions):
@@ -859,6 +972,8 @@ def build_prediction_overrides_payload(
 class ProteusAPI:
     """Proteus API client."""
 
+    _household_states: ClassVar[WeakValueDictionary] = WeakValueDictionary()
+
     _rate_limited_until_by_scope: ClassVar[dict[tuple[str, str, str], float]] = {}
     _next_rate_limit_error_by_scope: ClassVar[dict[tuple[str, str, str], float]] = {}
 
@@ -880,6 +995,14 @@ class ProteusAPI:
         self._next_price_update = 0.0
         self._last_control_plan_data: dict[str, Any] | None = None
         self._next_control_plan_update = 0.0
+        self._plan_snapshot: dict[str, Any] | None = None
+        self._plan_state = PlanWriteState()
+        self._plan_capabilities: list[dict[str, Any]] | None = None
+        self._diagnostic_id = uuid4().hex[:12]
+        self._diagnostic_identifiers: dict[str, str] = {}
+        self._last_diagnostic: str | None = None
+        self._diagnostic_capabilities_fetched = False
+        self.last_write_error: str | None = None
         self._account_key = (self.tenant, self.email.strip().casefold())
 
     def get_headers(self, *, for_post: bool = False) -> dict[str, str]:
@@ -1356,13 +1479,26 @@ class ProteusAPI:
                 retry_after = self._get_rate_limit_remaining(API_PRICE_ENDPOINTS)
                 self._next_price_update = monotonic() + (retry_after or UPDATE_INTERVAL)
 
+        if (
+            _DIAGNOSTICS.level == logging.DEBUG
+            and not self._diagnostic_capabilities_fetched
+        ):
+            try:
+                await self.fetch_plan_capabilities()
+                self._diagnostic_capabilities_fetched = True
+            except (ValueError, ProteusConnectionError) as exception:
+                _LOGGER.debug("Could not capture plan capabilities: %s", exception)
+
         if monotonic() >= self._next_control_plan_update:
             _LOGGER.debug("Fetching control plan for %s", self.inverter_id)
             control_plan_data = await self._fetch_control_plan_safely()
             if control_plan_data:
                 self._last_control_plan_data = control_plan_data
-                self._next_control_plan_update = (
-                    monotonic() + CONTROL_PLAN_UPDATE_INTERVAL
+                self._next_control_plan_update = monotonic() + (
+                    UPDATE_INTERVAL
+                    if self.plan_refresh_pending
+                    or control_plan_data.get("is_recalculating_plan")
+                    else CONTROL_PLAN_UPDATE_INTERVAL
                 )
             else:
                 retry_after = self._get_rate_limit_remaining(
@@ -1372,6 +1508,11 @@ class ProteusAPI:
                     retry_after or UPDATE_INTERVAL
                 )
 
+        plan_status = {"plan_refresh_pending": self.plan_refresh_pending}
+        if self._plan_capabilities is not None:
+            plan_status["forbidden_plan_combinations"] = self._plan_capabilities
+        if self._last_control_plan_data is not None:
+            self._last_control_plan_data.update(plan_status)
         data = self._parse_data(status_payload) if status_payload is not None else {}
         if data:
             if keep_cached_status and self._last_data is not None:
@@ -1420,6 +1561,7 @@ class ProteusAPI:
 
     async def fetch_control_plan(self) -> dict[str, Any]:
         """Fetch the active control plan for this inverter."""
+        revision = self._plan_state.revision
         client = await self._get_client()
 
         try:
@@ -1475,7 +1617,181 @@ class ProteusAPI:
                 format_connection_error(exception)
             ) from exception
 
-        return parse_control_plan_response(response_text)
+        snapshot = decode_single_result(response_text)
+        parsed = parse_control_plan_payload(snapshot)
+        if parsed and isinstance(snapshot, dict):
+            self._plan_snapshot = snapshot
+            plan = snapshot.get("activePlan")
+            if isinstance(plan, dict) and plan.get("householdId"):
+                key = (*self._account_key, plan["householdId"])
+                shared = self._household_states.get(key)
+                if shared is None:
+                    self._household_states[key] = self._plan_state
+                elif shared is not self._plan_state:
+                    self._plan_state = shared
+            if (
+                self._plan_state.revision == revision
+                and not self._plan_state.writing
+                and snapshot.get("isRecalculatingPlan") is False
+            ):
+                self._plan_state.pending = False
+            if _DIAGNOSTICS.level == logging.DEBUG:
+                capture = json.dumps(
+                    diagnostic_snapshot(snapshot, self._diagnostic_identifiers),
+                    sort_keys=True,
+                )
+                if capture != self._last_diagnostic:
+                    _DIAGNOSTICS.debug(
+                        "Plan snapshot %s at %s: %s",
+                        self._diagnostic_id,
+                        datetime.now(UTC).isoformat(),
+                        capture,
+                    )
+                    self._last_diagnostic = capture
+        return parsed
+
+    @property
+    def plan_refresh_pending(self) -> bool:
+        """Return whether an accepted or uncertain write needs a fresh plan."""
+        return self._plan_state.pending
+
+    def invalidate_plan(self) -> None:
+        """Schedule a fresh plan read after a write."""
+        self._plan_state.pending = True
+        self._plan_state.revision += 1
+        self._next_control_plan_update = 0.0
+
+    def shares_household(self, other: ProteusAPI) -> bool:
+        """Return whether two configured clients share a known household."""
+        return self._plan_state is other._plan_state
+
+    def request_plan_refresh(self) -> None:
+        """Refresh on the next coordinator update without starting a new write."""
+        self._next_control_plan_update = 0.0
+
+    async def fetch_plan_capabilities(self) -> list[dict[str, Any]]:
+        """Read forbidden combinations without treating a failed read as an empty list."""
+        endpoint = API_PLAN_CAPABILITIES_ENDPOINT
+        if self._get_rate_limit_remaining((endpoint,)):
+            raise ProteusConnectionError("Inverter capabilities are rate limited")
+        client = await self._get_client()
+        try:
+            async with client.get(
+                f"{API_BASE_URL}{endpoint}",
+                params=self._build_inverter_batch_params((endpoint,)),
+                headers=self.get_headers(),
+            ) as response:
+                body = await response.text()
+                errors = get_control_plan_error_payload(
+                    body, self._parse_response_body(body)
+                )
+                delay = self._extract_trpc_rate_limit_retry_after(errors)
+                if response.status == 429 or delay is not None:
+                    self._set_rate_limit_cooldown(delay or UPDATE_INTERVAL, (endpoint,))
+                    raise ProteusConnectionError(
+                        "Inverter capabilities are rate limited"
+                    )
+                messages = self._extract_trpc_error_messages(errors)
+                if response.status not in (200, 207) or messages:
+                    raise ProteusConnectionError(
+                        "; ".join(messages)
+                        or f"Capabilities request failed (HTTP {response.status})"
+                    )
+        except (aiohttp.ClientError, OSError) as exception:
+            raise ProteusConnectionError(
+                format_connection_error(exception)
+            ) from exception
+        capabilities = validate_capabilities(decode_single_result(body))
+        if (
+            capabilities != self._plan_capabilities
+            or not self._diagnostic_capabilities_fetched
+        ):
+            _DIAGNOSTICS.debug(
+                "Plan capabilities %s at %s: %s",
+                self._diagnostic_id,
+                datetime.now(UTC).isoformat(),
+                json.dumps(capabilities),
+            )
+        self._plan_capabilities = capabilities
+        return capabilities
+
+    async def update_plan_steps(
+        self, changes: list[dict[str, Any]], *, clear: bool = False
+    ) -> None:
+        """Fetch and preserve the complete merged plan before applying requested changes."""
+        validate_times([item["time"] for item in changes])
+        if self.plan_refresh_pending:
+            raise ValueError("A previous write is awaiting plan recalculation")
+        # Establish the household before obtaining the shared write lock.
+        if not await self._fetch_control_plan_safely():
+            raise ProteusConnectionError("Could not fetch a fresh active plan")
+        async with self._plan_state.lock:
+            if self.plan_refresh_pending:
+                raise ValueError("A previous write is awaiting plan recalculation")
+            if not await self._fetch_control_plan_safely():
+                raise ProteusConnectionError("Could not fetch a fresh active plan")
+            capabilities = await self.fetch_plan_capabilities()
+            payload = build_plan_payload(
+                self._plan_snapshot or {}, capabilities, changes, clear=clear
+            )
+            if not await self._post_plan_write(API_UPDATE_PLAN_ENDPOINT, payload):
+                raise ProteusConnectionError(
+                    self.last_write_error or "Plan update failed"
+                )
+
+    async def _post_plan_write(self, endpoint: str, payload: dict[str, Any]) -> bool:
+        """Send a write once; uncertain outcomes require a refresh, never a retry."""
+        self.last_write_error = None
+        if self._get_rate_limit_remaining((endpoint,)):
+            self.last_write_error = "Writes are rate limited; retry after the cooldown"
+            return False
+        client = await self._get_client()
+        # Mark before sending so an older in-flight GET cannot complete this write.
+        self.invalidate_plan()
+        self._plan_state.writing += 1
+        try:
+            async with client.post(
+                f"{API_BASE_URL}{endpoint}?batch=1",
+                json=payload,
+                headers=self.get_headers(for_post=True),
+                retry_options=ExponentialRetry(attempts=1),
+            ) as response:
+                body = await response.text()
+                if _DIAGNOSTICS.level == logging.DEBUG:
+                    _DIAGNOSTICS.debug(
+                        "Write response %s %s HTTP %s: %s",
+                        self._diagnostic_id,
+                        endpoint,
+                        response.status,
+                        json.dumps(write_response_diagnostic(body)),
+                    )
+                errors = get_control_plan_error_payload(
+                    body, self._parse_response_body(body)
+                )
+                messages = self._extract_trpc_error_messages(errors)
+                delay = self._extract_trpc_rate_limit_retry_after(errors)
+                if response.status == 429 or delay is not None:
+                    self._set_rate_limit_cooldown(delay or UPDATE_INTERVAL, (endpoint,))
+                if response.status != 200 or messages:
+                    self.last_write_error = (
+                        "; ".join(messages) or f"Write failed (HTTP {response.status})"
+                    )
+                    return False
+                if not has_single_result(body):
+                    self.last_write_error = (
+                        "Write response was malformed; its outcome is uncertain"
+                    )
+                    return False
+        except (aiohttp.ClientError, OSError, TimeoutError) as exception:
+            self.last_write_error = (
+                f"Write outcome is uncertain: {format_connection_error(exception)}"
+            )
+            return False
+        finally:
+            self._plan_state.writing -= 1
+            # Also invalidate a GET that started while the POST was in progress.
+            self.invalidate_plan()
+        return True
 
     def _parse_data(self, raw_data: Any) -> dict[str, Any]:
         """Parse raw API data into structured format."""
@@ -1625,33 +1941,11 @@ class ProteusAPI:
 
         A ``None`` value keeps the Proteus prediction for that quantity.
         """
-        try:
-            client = await self._get_client()
-
-            payload = build_prediction_overrides_payload(self.inverter_id, predictions)
-            _LOGGER.debug(
-                "Overriding %s prediction(s) for %s: %s",
-                len(predictions),
-                self.inverter_id,
-                payload,
+        payload = build_prediction_overrides_payload(self.inverter_id, predictions)
+        async with self._plan_state.lock:
+            return await self._post_plan_write(
+                API_PREDICTIONS_OVERRIDE_ENDPOINT, payload
             )
-
-            async with client.post(
-                f"{API_BASE_URL}{API_PREDICTIONS_OVERRIDE_ENDPOINT}?batch=1",
-                json=payload,
-                headers=self.get_headers(for_post=True),
-            ) as response:
-                data = await response.text()
-                _LOGGER.debug("Response data: %s", data)
-                return self._is_successful_trpc_response(
-                    response,
-                    data,
-                    operation="Prediction override update",
-                )
-
-        except Exception:
-            _LOGGER.exception("Error updating prediction overrides")
-            return False
 
     async def clear_prediction_overrides(self, times: list[datetime]) -> bool:
         """Remove prediction overrides for given hours."""

@@ -1,0 +1,81 @@
+{
+  "activePlan": {
+    "id": "plan-1",
+    "householdId": "household-1",
+    "createdAt": "2026-09-21T13:30:13.524Z",
+    "updatedAt": "2026-09-21T13:30:43.588Z",
+    "payload": {
+      "steps": [
+        {
+          "startAt": "2026-09-21T14:00:00.000Z",
+          "durationMinutes": 60,
+          "metadata": {
+            "flexalgoBattery": "charge_from_grid",
+            "flexalgoPv": "unrestricted",
+            "targetSoC": 76
+          }
+        }
+      ]
+    },
+    "stepsWithFlexibility": [
+      {
+        "id": "step-1",
+        "startAt": "2026-09-21T14:00:00.000Z",
+        "durationMinutes": 60,
+        "metadata": {
+          "flexalgoBattery": "default",
+          "flexalgoPv": "fully_restricted",
+          "targetSoC": null,
+          "manuallyEdited": true,
+          "manuallyLocked": false,
+          "locked": true,
+          "originalFlexalgoBattery": "charge_from_grid",
+          "originalFlexalgoPv": "unrestricted",
+          "originalTargetSoC": 76,
+          "predictedProduction": 3583.3125,
+          "predictedConsumption": 2906.6363,
+          "hasEditedPredictions": false
+        }
+      },
+      {
+        "id": "step-2",
+        "startAt": "2026-09-21T15:00:00.000Z",
+        "durationMinutes": 60,
+        "metadata": {
+          "flexalgoBattery": "discharge_to_household",
+          "flexalgoPv": "restricted_to_household",
+          "targetSoC": null,
+          "manuallyEdited": true,
+          "manuallyLocked": false,
+          "locked": true,
+          "originalFlexalgoBattery": "discharge_to_household",
+          "originalFlexalgoPv": "unrestricted",
+          "originalTargetSoC": 72,
+          "hasEditedPredictions": false
+        }
+      },
+      {
+        "id": "step-3",
+        "startAt": "2026-09-21T16:00:00.000Z",
+        "durationMinutes": 60,
+        "metadata": {
+          "flexalgoBattery": "discharge_to_household",
+          "flexalgoPv": "unrestricted",
+          "targetSoC": 67,
+          "manuallyEdited": false,
+          "manuallyLocked": false,
+          "locked": false,
+          "originalFlexalgoBattery": "discharge_to_household",
+          "originalFlexalgoPv": "unrestricted",
+          "originalTargetSoC": 67,
+          "hasEditedPredictions": false
+        }
+      }
+    ]
+  },
+  "inverter": {
+    "gridOverflowEnabled": true,
+    "gridOverflow": "ENABLED"
+  },
+  "isRecalculatingPlan": false
+}

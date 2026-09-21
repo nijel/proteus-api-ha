@@ -733,11 +733,21 @@ class ProteusControlPlanSensor(ProteusBaseSensor):
 
     _attr_translation_key = "control_plan"
     _attr_icon = "mdi:calendar-clock"
+    # Keep the full schedule in live state without exceeding recorder's size limit.
+    _unrecorded_attributes = frozenset({"steps"})
 
     def __init__(self, coordinator, config_entry, inverter_id, inverter):
         """Initialize the sensor."""
         super().__init__(coordinator, config_entry, inverter_id, inverter)
         self._attr_unique_id = self._get_unique_id("proteus_control_plan")
+
+    async def async_update(self) -> None:
+        """Force an active-plan read when the user explicitly refreshes this entity."""
+        info = self.hass.data[DOMAIN][self._config_entry.entry_id]["inverters"][
+            self._inverter_id
+        ]
+        info["api"].request_plan_refresh()
+        await super().async_update()
 
     @property
     def native_value(self) -> int | None:
@@ -768,6 +778,15 @@ class ProteusControlPlanSensor(ProteusBaseSensor):
         plan_created_at = self.coordinator.data.get("control_plan_created_at")
         if plan_created_at is not None:
             attributes["plan_created_at"] = plan_created_at
+
+        for key in (
+            "is_recalculating_plan",
+            "plan_refresh_pending",
+            "grid_overflow_enabled",
+            "forbidden_plan_combinations",
+        ):
+            if key in self.coordinator.data:
+                attributes[key] = self.coordinator.data[key]
 
         if not attributes:
             return None

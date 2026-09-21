@@ -398,3 +398,36 @@ async def test_failed_control_plan_refresh_preserves_cache(
 
     assert data["control_plan_id"] == "old-plan"
     assert api.next_refresh == 100 + UPDATE_INTERVAL
+
+
+async def test_pending_polling_and_completion(monkeypatch):
+    """Fast plan polling ends only on an explicit complete response, including after errors."""
+    snapshot = {
+        "activePlan": {"id": "plan-1", "payload": {"steps": []}},
+        "isRecalculatingPlan": False,
+    }
+    now = 100
+    monkeypatch.setattr(
+        "custom_components.proteus_api.proteus_api.monotonic", lambda: now
+    )
+    api = RefreshProteusAPI(_plan_response(snapshot, "plain"), 200)
+    api.invalidate_plan()
+    snapshot["isRecalculatingPlan"] = True
+    response = api.client.get.return_value.__aenter__.return_value
+    response.text.return_value = _plan_response(snapshot, "plain")
+    data = await api.get_data()
+    assert data["plan_refresh_pending"] is True
+    assert data["is_recalculating_plan"] is True
+    assert api.next_refresh == now + UPDATE_INTERVAL
+    now += UPDATE_INTERVAL
+    response.text.return_value = "malformed"
+    data = await api.get_data()
+    assert data["control_plan_id"] == "plan-1"
+    assert data["plan_refresh_pending"] is True
+    now += UPDATE_INTERVAL
+    snapshot["isRecalculatingPlan"] = False
+    response.text.return_value = _plan_response(snapshot, "plain")
+    data = await api.get_data()
+    assert data["plan_refresh_pending"] is False
+    assert data["is_recalculating_plan"] is False
+    assert api.next_refresh == now + CONTROL_PLAN_UPDATE_INTERVAL
