@@ -3625,7 +3625,7 @@ wheels = [
 
 [[package]]
 name = "proteus-api-ha"
-version = "0.4.1"
+version = "0.5.0"
 source = { virtual = "." }
 dependencies = [
     { name = "aiohttp", version = "3.11.16", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.13.2'" },
