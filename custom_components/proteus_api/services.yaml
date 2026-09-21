@@ -26,3 +26,29 @@ clear_predictions:
         - "2026-08-09T20:00:00"
       selector:
         object:
+
+set_plan_steps:
+  target:
+    device:
+      integration: proteus_api
+  fields:
+    steps:
+      required: true
+      example: |-
+        - time: "2026-09-21T16:00:00+02:00"
+          flexalgo_battery: default
+          flexalgo_pv: fully_restricted
+      selector:
+        object:
+
+clear_plan_steps:
+  target:
+    device:
+      integration: proteus_api
+  fields:
+    times:
+      required: true
+      example: |-
+        - "2026-09-21T16:00:00+02:00"
+      selector:
+        object:

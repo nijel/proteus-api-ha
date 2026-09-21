@@ -26,8 +26,13 @@ API_PREDICTIONS_OVERRIDE_ENDPOINT = (
     "inverters.upsertMultipleInverterPredictionsOverride"
 )
 
+API_UPDATE_PLAN_ENDPOINT = "controlPlans.updateSteps"
+API_PLAN_CAPABILITIES_ENDPOINT = "inverters.resolveMissingFlexalgoCapabilities"
+
 # Services
 SERVICE_SET_PREDICTIONS = "set_predictions"
+SERVICE_SET_PLAN_STEPS = "set_plan_steps"
+SERVICE_CLEAR_PLAN_STEPS = "clear_plan_steps"
 SERVICE_CLEAR_PREDICTIONS = "clear_predictions"
 ATTR_PREDICTIONS = "predictions"
 ATTR_TIMES = "times"

@@ -165,3 +165,81 @@ MIT License
 ## Podpora
 
 Pro hlášení chyb nebo návrhy vylepšení použijte GitHub Issues.
+
+## Úpravy plánu řízení
+
+Predikce mění očekávanou spotřebu/výrobu; služby `set_plan_steps` a
+`clear_plan_steps` mění akce baterie a FVE pro vybrané hodiny. Vyžadují
+explicitní cíl odpovídající právě jednomu invertoru. Integrace načte čerstvé
+sloučené okno plánu a zachová ostatní hodiny i jejich ruční příznaky.
+
+```yaml
+action: proteus_api.set_plan_steps
+target:
+  device_id: 0123456789abcdef0123456789abcdef
+data:
+  steps:
+    - time: "2026-09-21T16:00:00+02:00"
+      flexalgo_battery: default
+      flexalgo_pv: fully_restricted
+    - time: "2026-09-21T17:00:00+02:00"
+      flexalgo_battery: charge_from_grid
+      target_soc: 80
+```
+
+Každý krok vyžaduje `time` a alespoň jedno měněné pole. Vynechaná pole si
+zachovají aktuální hodnoty. `is_manually_locked: true` hodinu výslovně zamkne.
+`target_soc` přijímá procenta 0–100 nebo `null`; číselný cíl se uloží pouze
+při nabíjení/vybíjení ze/do sítě nebo zamčení hodiny. Nepodporované kombinace
+se odmítnou před zápisem, včetně neplatných kombinací v nezměněných hodinách.
+
+Stavy baterie: `charge_from_grid`, `charge_from_pv`, `default`, `do_not_charge`,
+`do_not_discharge`, `discharge_to_household`, `discharge_to_grid`, `unknown`.
+Stavy FVE: `unrestricted`, `restricted_to_household` (výroba pro domácnost),
+`fully_restricted` (vypnutí výroby), `unknown`.
+
+```yaml
+action: proteus_api.clear_plan_steps
+target:
+  device_id: 0123456789abcdef0123456789abcdef
+data:
+  times:
+    - "2026-09-21T16:00:00+02:00"
+```
+
+Server při editaci zamyká i dřívější hodiny. Zrušení ručních příznaků jedné
+hodiny proto nemusí odstranit její kaskádový zámek, pokud zůstává pozdější
+upravená či zamčená hodina. Pozdější úpravy integrace automaticky nemaže.
+
+Všechny časy musí být začátky hodin a nesmí se opakovat ani po převodu do UTC.
+Naivní čas se interpretuje v časové zóně Home Assistantu. Predikční služby
+přijímají nejvýše 96 položek; delší seznam je třeba rozdělit do samostatných
+volání. Úpravy plánu musí patřit do aktuálně vráceného okna.
+
+Úspěch služby znamená přijetí zápisu. Přepočet se sleduje na pozadí každých
+10 sekund (s respektováním omezení API), po dokončení opět každých 15 minut.
+Sensor plánu nabízí atributy `is_recalculating_plan`, `plan_refresh_pending`,
+`grid_overflow_enabled` a po načtení schopností `forbidden_plan_combinations`.
+Kroky obsahují také `manually_edited`, `manually_locked`, `locked`, původní
+akce a predikční kontext v jednotkách API. Při nejasném výsledku zápisu se
+požadavek automaticky neopakuje; nejprve se načte stav serveru.
+
+Úplný seznam `steps` je dostupný v aktuálním stavu sensoru pro dashboardy a automatizace, ale neukládá se do historie recorderu kvůli jeho velikosti. Stav sensoru (počet kroků) a ostatní atributy se nadále zaznamenávají.
+
+### Dočasný diagnostický záznam plánu
+
+Pro zachycení zbývajících příkladů zamčení/resetu zapněte konkrétní logger:
+
+```yaml
+logger:
+  logs:
+    custom_components.proteus_api.plan_diagnostics: debug
+```
+
+Po restartu integrace zaznamená první a následně změněné sloučené plány
+při běžném obnovení, včetně ručních příznaků a původních hodnot. Jednou načte
+a zaznamená zakázané kombinace. Pro okamžité načtení plánu zavolejte
+`homeassistant.update_entity` pro sensor plánu; omezení API se nadále respektují. Výpis obsahuje JSON a čas zachycení,
+nezahrnuje adresu, přihlašovací údaje ani vnořenou konfiguraci účtu.
+Stejné plány se opakovaně nevypisují. Diagnostický logger po sběru vypněte;
+dočasný výpis bude odstraněn před vydáním po ověření fixture souborů.

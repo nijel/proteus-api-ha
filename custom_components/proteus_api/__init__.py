@@ -33,16 +33,55 @@ from .const import (
     ATTR_TIME,
     ATTR_TIMES,
     DOMAIN,
+    SERVICE_CLEAR_PLAN_STEPS,
     SERVICE_CLEAR_PREDICTIONS,
+    SERVICE_SET_PLAN_STEPS,
     SERVICE_SET_PREDICTIONS,
     UPDATE_INTERVAL,
     normalize_email,
 )
-from .proteus_api import AuthenticationError, ProteusAPI
+from .plan import BATTERY_STATES, PV_STATES, validate_soc, validate_times
+from .proteus_api import AuthenticationError, ProteusAPI, ProteusConnectionError
 
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.SWITCH]
+
+
+def _validate_hour(value: Any) -> Any:
+    """Parse a local or offset timestamp and require an hourly UTC boundary."""
+    parsed = cv.datetime(value)
+    try:
+        validate_times([dt_util.as_utc(parsed)])
+    except ValueError as err:
+        raise vol.Invalid(str(err)) from err
+    return parsed
+
+
+def _unique_hours(values: list[Any]) -> list[Any]:
+    """Reject duplicate hours, including timestamps with different UTC offsets."""
+    times = [item[ATTR_TIME] if isinstance(item, dict) else item for item in values]
+    try:
+        validate_times([dt_util.as_utc(value) for value in times])
+    except ValueError as err:
+        raise vol.Invalid(str(err)) from err
+    return values
+
+
+def _soc(value: Any) -> Any:
+    """Validate a target percentage without accepting booleans or nonfinite values."""
+    try:
+        validate_soc(value)
+    except ValueError as err:
+        raise vol.Invalid(str(err)) from err
+    return value
+
+
+def _has_step_change(value: dict[str, Any]) -> dict[str, Any]:
+    """Require an actual action field alongside the time."""
+    if len(value) < 2:
+        raise vol.Invalid("Each step requires at least one change")
+    return value
 
 
 def _has_prediction_value(prediction: dict[str, Any]) -> dict[str, Any]:
@@ -61,7 +100,7 @@ def _has_prediction_value(prediction: dict[str, Any]) -> dict[str, Any]:
 PREDICTION_SCHEMA = vol.All(
     vol.Schema(
         {
-            vol.Required(ATTR_TIME): cv.datetime,
+            vol.Required(ATTR_TIME): _validate_hour,
             vol.Optional(ATTR_CONSUMPTION_KWH): vol.Any(None, vol.Coerce(float)),
             vol.Optional(ATTR_PRODUCTION_KWH): vol.Any(None, vol.Coerce(float)),
         }
@@ -78,7 +117,10 @@ SET_PREDICTIONS_SCHEMA = vol.Schema(
     {
         **TARGET_SCHEMA,
         vol.Required(ATTR_PREDICTIONS): vol.All(
-            cv.ensure_list, [PREDICTION_SCHEMA], vol.Length(min=1)
+            cv.ensure_list,
+            [PREDICTION_SCHEMA],
+            vol.Length(min=1, max=96),
+            _unique_hours,
         ),
     }
 )
@@ -87,7 +129,37 @@ CLEAR_PREDICTIONS_SCHEMA = vol.Schema(
     {
         **TARGET_SCHEMA,
         vol.Required(ATTR_TIMES): vol.All(
-            cv.ensure_list, [cv.datetime], vol.Length(min=1)
+            cv.ensure_list, [_validate_hour], vol.Length(min=1, max=96), _unique_hours
+        ),
+    }
+)
+
+
+PLAN_STEP_SCHEMA = vol.All(
+    vol.Schema(
+        {
+            vol.Required(ATTR_TIME): _validate_hour,
+            vol.Optional("flexalgo_battery"): vol.In(BATTERY_STATES),
+            vol.Optional("flexalgo_pv"): vol.In(PV_STATES),
+            vol.Optional("target_soc"): _soc,
+            vol.Optional("is_manually_locked"): bool,
+        }
+    ),
+    _has_step_change,
+)
+SET_PLAN_STEPS_SCHEMA = vol.Schema(
+    {
+        **TARGET_SCHEMA,
+        vol.Required("steps"): vol.All(
+            cv.ensure_list, [PLAN_STEP_SCHEMA], vol.Length(min=1), _unique_hours
+        ),
+    }
+)
+CLEAR_PLAN_STEPS_SCHEMA = vol.Schema(
+    {
+        **TARGET_SCHEMA,
+        vol.Required(ATTR_TIMES): vol.All(
+            cv.ensure_list, [_validate_hour], vol.Length(min=1), _unique_hours
         ),
     }
 )
@@ -181,6 +253,45 @@ def _async_get_target_apis(
     return apis
 
 
+async def _async_refresh_written_plan(hass: HomeAssistant, api: ProteusAPI) -> None:
+    """Publish refreshed plans for the target and known household peers."""
+    for entry_data in hass.data.get(DOMAIN, {}).values():
+        for info in entry_data["inverters"].values():
+            other = info["api"]
+            if other is api or api.shares_household(other):
+                other.request_plan_refresh()
+                await info["coordinator"].async_request_refresh()
+
+
+async def _async_plan_steps(
+    hass: HomeAssistant, call: ServiceCall, *, clear: bool = False
+) -> None:
+    """Apply or reset explicitly targeted hours in one household plan."""
+    if not call.data.get(ATTR_DEVICE_ID) and not call.data.get(ATTR_ENTITY_ID):
+        raise ServiceValidationError("Select exactly one Proteus inverter")
+    apis = _async_get_target_apis(hass, call)
+    if len(apis) != 1:
+        raise ServiceValidationError("Select exactly one Proteus inverter")
+    _, api = apis[0]
+    changes = (
+        [{"time": dt_util.as_utc(value)} for value in call.data[ATTR_TIMES]]
+        if clear
+        else [
+            {**item, "time": dt_util.as_utc(item[ATTR_TIME])}
+            for item in call.data["steps"]
+        ]
+    )
+    try:
+        await api.update_plan_steps(changes, clear=clear)
+    except ValueError as err:
+        raise ServiceValidationError(str(err)) from err
+    except ProteusConnectionError as err:
+        raise HomeAssistantError(str(err)) from err
+    finally:
+        if api.plan_refresh_pending:
+            await _async_refresh_written_plan(hass, api)
+
+
 async def _async_set_predictions(hass: HomeAssistant, call: ServiceCall) -> None:
     """Override predicted consumption and/or production in Proteus.
 
@@ -197,9 +308,13 @@ async def _async_set_predictions(hass: HomeAssistant, call: ServiceCall) -> None
     ]
 
     for inverter_id, api in _async_get_target_apis(hass, call):
-        if not await api.upsert_prediction_overrides(predictions):
+        success = await api.upsert_prediction_overrides(predictions)
+        if api.plan_refresh_pending:
+            await _async_refresh_written_plan(hass, api)
+        if not success:
             raise HomeAssistantError(
-                f"Failed to override predictions for inverter {inverter_id}"
+                api.last_write_error
+                or f"Failed to override predictions for inverter {inverter_id}"
             )
 
 
@@ -208,9 +323,13 @@ async def _async_clear_predictions(hass: HomeAssistant, call: ServiceCall) -> No
     times = [dt_util.as_utc(time) for time in call.data[ATTR_TIMES]]
 
     for inverter_id, api in _async_get_target_apis(hass, call):
-        if not await api.clear_prediction_overrides(times):
+        success = await api.clear_prediction_overrides(times)
+        if api.plan_refresh_pending:
+            await _async_refresh_written_plan(hass, api)
+        if not success:
             raise HomeAssistantError(
-                f"Failed to clear predictions for inverter {inverter_id}"
+                api.last_write_error
+                or f"Failed to clear predictions for inverter {inverter_id}"
             )
 
 
@@ -239,6 +358,27 @@ def _async_register_services(hass: HomeAssistant) -> None:
         SERVICE_CLEAR_PREDICTIONS,
         handle_clear_predictions,
         schema=CLEAR_PREDICTIONS_SCHEMA,
+    )
+
+    async def handle_set_plan_steps(call: ServiceCall) -> None:
+        """Handle edits to a household schedule."""
+        await _async_plan_steps(hass, call)
+
+    async def handle_clear_plan_steps(call: ServiceCall) -> None:
+        """Handle resetting manually edited hours."""
+        await _async_plan_steps(hass, call, clear=True)
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SET_PLAN_STEPS,
+        handle_set_plan_steps,
+        schema=SET_PLAN_STEPS_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_CLEAR_PLAN_STEPS,
+        handle_clear_plan_steps,
+        schema=CLEAR_PLAN_STEPS_SCHEMA,
     )
 
 
@@ -373,6 +513,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if not hass.data[DOMAIN]:
             hass.services.async_remove(DOMAIN, SERVICE_SET_PREDICTIONS)
             hass.services.async_remove(DOMAIN, SERVICE_CLEAR_PREDICTIONS)
+            hass.services.async_remove(DOMAIN, SERVICE_SET_PLAN_STEPS)
+            hass.services.async_remove(DOMAIN, SERVICE_CLEAR_PLAN_STEPS)
 
     return unload_ok
 
