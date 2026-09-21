@@ -39,7 +39,7 @@ async def async_setup_entry(
                 api,
                 inverter_id,
                 inverter,
-                control_type,
+                control_type=control_type,
             )
             for control_type in CONTROL_TYPES
         )
@@ -148,6 +148,7 @@ class ProteusManualControlSwitch(ProteusOptimisticSwitch):
         api,
         inverter_id,
         inverter,
+        *,
         control_type,
     ):
         """Initialize the switch."""

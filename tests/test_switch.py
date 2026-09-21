@@ -58,7 +58,7 @@ def test_custom_switch_availability_respects_failed_coordinator_update() -> None
         api,
         inverter_id,
         inverter,
-        control_type,
+        control_type=control_type,
     )
     automatic_switch = ProteusAutomaticModeSwitch(
         automatic_coordinator,
