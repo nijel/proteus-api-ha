@@ -1,8 +1,11 @@
 set_predictions:
-  target:
-    device:
-      integration: proteus_api
   fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          filter:
+            integration: proteus_api
     predictions:
       required: true
       example: |-
@@ -15,10 +18,13 @@ set_predictions:
         object:
 
 clear_predictions:
-  target:
-    device:
-      integration: proteus_api
   fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          filter:
+            integration: proteus_api
     times:
       required: true
       example: |-
@@ -28,10 +34,13 @@ clear_predictions:
         object:
 
 set_plan_steps:
-  target:
-    device:
-      integration: proteus_api
   fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          filter:
+            integration: proteus_api
     steps:
       required: true
       example: |-
@@ -42,10 +51,13 @@ set_plan_steps:
         object:
 
 clear_plan_steps:
-  target:
-    device:
-      integration: proteus_api
   fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          filter:
+            integration: proteus_api
     times:
       required: true
       example: |-
