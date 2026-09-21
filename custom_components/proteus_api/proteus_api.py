@@ -648,9 +648,12 @@ def get_trpc_stream_result_json(
 ) -> Any | None:
     """Return one resolved result from a decoded tRPC jsonl streaming response."""
     try:
-        return resolved_roots[str(position)]["result"]["data"]
+        data = resolved_roots[str(position)]["result"]["data"]
     except (KeyError, TypeError):
         return None
+    if isinstance(data, dict) and "json" in data:
+        return data["json"]
+    return data
 
 
 def parse_control_plan_step(step: Any) -> dict[str, Any] | None:
@@ -694,6 +697,13 @@ def parse_control_plan_payload(control_plan_data: Any) -> dict[str, Any]:
     if not isinstance(control_plan_data, dict):
         return parsed
 
+    if "activePlan" in control_plan_data and control_plan_data["activePlan"] is None:
+        return {
+            "control_plan_steps": [],
+            "control_plan_id": None,
+            "control_plan_created_at": None,
+        }
+
     active_plan = control_plan_data.get("activePlan")
     if not isinstance(active_plan, dict):
         return parsed
@@ -706,8 +716,7 @@ def parse_control_plan_payload(control_plan_data: Any) -> dict[str, Any]:
             for step in (parse_control_plan_step(raw_step) for raw_step in raw_steps)
             if step is not None
         ]
-        if steps:
-            parsed["control_plan_steps"] = steps
+        parsed["control_plan_steps"] = steps
 
     if active_plan.get("id") is not None:
         parsed["control_plan_id"] = active_plan.get("id")
@@ -748,6 +757,23 @@ def _parse_streamed_control_plan(response_text: str) -> dict[str, Any]:
 
     control_plan_data = get_trpc_stream_result_json(resolved_roots, 0)
     return parse_control_plan_payload(control_plan_data)
+
+
+def get_control_plan_error_payload(response_text: str, payload: Any) -> Any:
+    """Expose plain, resolved, and rejected stream errors to tRPC error helpers."""
+    lines = payload if isinstance(payload, list) else [payload]
+    stream_errors = []
+    for line in lines:
+        chunk = line.get("json") if isinstance(line, dict) else None
+        if isinstance(chunk, list) and len(chunk) == 3 and chunk[1] == 1:
+            stream_errors.append({"error": chunk[2]})
+
+    try:
+        roots = decode_trpc_stream_response(response_text)
+    except (JSONDecodeError, KeyError, TypeError, IndexError, ValueError):
+        roots = {}
+
+    return [*lines, *roots.values(), *stream_errors]
 
 
 def parse_current_step_payload(current_step: Any) -> dict[str, Any]:
@@ -1362,15 +1388,25 @@ class ProteusAPI:
             ) as response:
                 response_text = await response.text()
 
-                if response.status == TRPC_RATE_LIMIT_HTTP_STATUS:
-                    retry_after = (
-                        self._extract_trpc_rate_limit_retry_after(
-                            self._parse_response_body(response_text)
-                        )
-                        or UPDATE_INTERVAL
-                    )
+                error_payload = get_control_plan_error_payload(
+                    response_text, self._parse_response_body(response_text)
+                )
+                retry_after = self._extract_trpc_rate_limit_retry_after(error_payload)
+                if (
+                    response.status == TRPC_RATE_LIMIT_HTTP_STATUS
+                    or retry_after is not None
+                ):
+                    retry_after = retry_after or UPDATE_INTERVAL
                     self._set_rate_limit_cooldown(
                         retry_after, (API_CONTROL_PLAN_ENDPOINT,)
+                    )
+                    self._log_rate_limit(
+                        retry_after,
+                        self._extract_trpc_error_messages(
+                            error_payload, (API_CONTROL_PLAN_ENDPOINT,)
+                        )
+                        or [f"HTTP {response.status}"],
+                        API_CONTROL_PLAN_ENDPOINT,
                     )
                     return {}
 
@@ -1381,6 +1417,13 @@ class ProteusAPI:
                         response.url,
                         response.status,
                         response_text,
+                    )
+                    return {}
+
+                if errors := self._extract_trpc_error_messages(error_payload):
+                    _LOGGER.warning(
+                        "Control plan request returned tRPC errors: %s",
+                        "; ".join(errors),
                     )
                     return {}
         except ProteusConnectionError:
