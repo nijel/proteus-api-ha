@@ -99,6 +99,13 @@ Integrace automaticky objeví všechny invertory dostupné ve vašem účtu a vy
 
 ## Služby
 
+V rozhraní vyberte zařízení invertoru v poli **Invertor**. V YAML se výběr zadává jako `data.device_id`; dosavadní volání s `target.device_id` nebo `target.entity_id` zůstávají podporovaná.
+
+Všechny časy musí být začátky hodin a nesmí se opakovat ani po převodu do UTC.
+Naivní čas se interpretuje v časové zóně Home Assistantu. Predikční služby
+přijímají nejvýše 96 položek; delší seznam je třeba rozdělit do samostatných
+volání. Úpravy plánu musí patřit do aktuálně vráceného okna.
+
 ### `proteus_api.set_predictions`
 
 Přepíše předpověď spotřeby a/nebo výroby, se kterou plánuje optimalizační algoritmus Protea (stejná funkce jako ruční úprava v Proteovi na stránce plánu). Užitečné, když má člověk vlastní, přesnější předpověď (např. Solcast) nebo ví o něčem, co Proteus vědět nemůže.
@@ -140,31 +147,7 @@ data:
     - "2026-08-09T20:00:00"
 ```
 
-## Vývoj
-
-Projekt používá `uv` a závislosti pro testy jsou definované v `pyproject.toml`.
-
-Instalace vývojového prostředí:
-
-```console
-uv sync --group dev
-```
-
-Spuštění testů:
-
-```console
-uv run --group dev python -m pytest tests -v
-```
-
-## Licence
-
-MIT License
-
-## Podpora
-
-Pro hlášení chyb nebo návrhy vylepšení použijte GitHub Issues.
-
-## Úpravy plánu řízení
+### `proteus_api.set_plan_steps`
 
 Predikce mění očekávanou spotřebu/výrobu; služby `set_plan_steps` a
 `clear_plan_steps` mění akce baterie a FVE pro vybrané hodiny. Vyžadují
@@ -195,6 +178,10 @@ Stavy baterie: `charge_from_grid`, `charge_from_pv`, `default`, `do_not_charge`,
 Stavy FVE: `unrestricted`, `restricted_to_household` (výroba pro domácnost),
 `fully_restricted` (vypnutí výroby), `unknown`.
 
+### `proteus_api.clear_plan_steps`
+
+Zruší ruční příznaky pro hodiny uvedené v poli `times`. Vyžaduje výběr právě jednoho invertoru.
+
 ```yaml
 action: proteus_api.clear_plan_steps
 data:
@@ -207,10 +194,7 @@ Server při editaci zamyká i dřívější hodiny. Zrušení ručních přízna
 hodiny proto nemusí odstranit její kaskádový zámek, pokud zůstává pozdější
 upravená či zamčená hodina. Pozdější úpravy integrace automaticky nemaže.
 
-Všechny časy musí být začátky hodin a nesmí se opakovat ani po převodu do UTC.
-Naivní čas se interpretuje v časové zóně Home Assistantu. Predikční služby
-přijímají nejvýše 96 položek; delší seznam je třeba rozdělit do samostatných
-volání. Úpravy plánu musí patřit do aktuálně vráceného okna.
+### Obnovení plánu a stav sensoru
 
 Úspěch služby znamená přijetí zápisu. Přepočet se sleduje na pozadí každých
 10 sekund (s respektováním omezení API), po dokončení opět každých 15 minut.
@@ -221,6 +205,22 @@ akce a predikční kontext v jednotkách API. Při nejasném výsledku zápisu s
 požadavek automaticky neopakuje; nejprve se načte stav serveru.
 
 Úplný seznam `steps` je dostupný v aktuálním stavu sensoru pro dashboardy a automatizace, ale neukládá se do historie recorderu kvůli jeho velikosti. Stav sensoru (počet kroků) a ostatní atributy se nadále zaznamenávají.
+
+## Vývoj
+
+Projekt používá `uv` a závislosti pro testy jsou definované v `pyproject.toml`.
+
+Instalace vývojového prostředí:
+
+```console
+uv sync --group dev
+```
+
+Spuštění testů:
+
+```console
+uv run --group dev python -m pytest tests -v
+```
 
 ### Dočasný diagnostický záznam plánu
 
@@ -239,3 +239,11 @@ a zaznamená zakázané kombinace. Pro okamžité načtení plánu zavolejte
 nezahrnuje adresu, přihlašovací údaje ani vnořenou konfiguraci účtu.
 Stejné plány se opakovaně nevypisují. Diagnostický logger po sběru vypněte;
 dočasný výpis bude odstraněn před vydáním po ověření fixture souborů.
+
+## Licence
+
+MIT License
+
+## Podpora
+
+Pro hlášení chyb nebo návrhy vylepšení použijte GitHub Issues.
