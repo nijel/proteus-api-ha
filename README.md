@@ -80,6 +80,9 @@ Integrace automaticky objeví všechny invertory dostupné ve vašem účtu a vy
 
 ### Binární sensory
 
+Tyto sensory zachovávají kompatibilitu se staršími automatizacemi a zobrazují
+stejné stavy jako přepínače. Na stránce zařízení jsou zařazeny do diagnostiky.
+
 - `binary_sensor.proteus_prodej_do_site_misto_nabijeni` - Prodej do sítě místo nabíjení
 - `binary_sensor.proteus_prodej_z_baterie_do_site` - Prodej z baterie do sítě
 - `binary_sensor.proteus_setreni_energie_v_baterii` - Šetření energie v baterii
