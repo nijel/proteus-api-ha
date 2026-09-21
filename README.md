@@ -115,9 +115,8 @@ Aspoň jedna z hodnot musí být uvedená. Vynechaná veličina zůstane na pře
 
 ```yaml
 action: proteus_api.set_predictions
-target:
-  device_id: 0123456789abcdef0123456789abcdef
 data:
+  device_id: 0123456789abcdef0123456789abcdef
   predictions:
     - time: "2026-08-09T19:00:00"
       consumption_kwh: 0.7
@@ -134,9 +133,8 @@ Pole `times` je seznam začátků hodin, u kterých se má přepis odstranit.
 
 ```yaml
 action: proteus_api.clear_predictions
-target:
-  device_id: 0123456789abcdef0123456789abcdef
 data:
+  device_id: 0123456789abcdef0123456789abcdef
   times:
     - "2026-08-09T19:00:00"
     - "2026-08-09T20:00:00"
@@ -175,9 +173,8 @@ sloučené okno plánu a zachová ostatní hodiny i jejich ruční příznaky.
 
 ```yaml
 action: proteus_api.set_plan_steps
-target:
-  device_id: 0123456789abcdef0123456789abcdef
 data:
+  device_id: 0123456789abcdef0123456789abcdef
   steps:
     - time: "2026-09-21T16:00:00+02:00"
       flexalgo_battery: default
@@ -200,9 +197,8 @@ Stavy FVE: `unrestricted`, `restricted_to_household` (výroba pro domácnost),
 
 ```yaml
 action: proteus_api.clear_plan_steps
-target:
-  device_id: 0123456789abcdef0123456789abcdef
 data:
+  device_id: 0123456789abcdef0123456789abcdef
   times:
     - "2026-09-21T16:00:00+02:00"
 ```
