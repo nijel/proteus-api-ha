@@ -85,8 +85,10 @@ def test_prefers_endpoint_from_error_data() -> None:
     ]
 
     assert extract_trpc_error_messages(payload, ("inverters.detail",)) == [
-        "prices.currentDistributionPrices: Rate limit exceeded. "
-        "Try again in 9 seconds. (code: -32029)"
+        (
+            "prices.currentDistributionPrices: Rate limit exceeded. "
+            "Try again in 9 seconds. (code: -32029)"
+        )
     ]
 
 
