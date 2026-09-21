@@ -7,6 +7,7 @@ import logging
 from homeassistant.components.binary_sensor import BinarySensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -62,7 +63,9 @@ class ProteusBaseBinarySensor(CoordinatorEntity, BinarySensorEntity):
 
 
 class ProteusManualControlBinarySensor(ProteusBaseBinarySensor):
-    """Binary sensor for manual control states."""
+    """Compatibility binary sensor for manual control states."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(
         self,
