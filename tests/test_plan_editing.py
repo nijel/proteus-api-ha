@@ -10,11 +10,13 @@ import logging
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
+from zoneinfo import ZoneInfo
 
 import pytest
 import voluptuous as vol
 
 from custom_components.proteus_api import (
+    CLEAR_PLAN_STEPS_SCHEMA,
     CLEAR_PREDICTIONS_SCHEMA,
     SET_PLAN_STEPS_SCHEMA,
     SET_PREDICTIONS_SCHEMA,
@@ -31,6 +33,7 @@ from custom_components.proteus_api.proteus_api import (
 from custom_components.proteus_api.sensor import ProteusControlPlanSensor
 from homeassistant.core import ServiceCall
 from homeassistant.exceptions import ServiceValidationError
+from homeassistant.util import dt as dt_util
 
 CAPABILITIES = [{"battery": "do_not_charge", "photovoltaic": "restricted_to_household"}]
 
@@ -703,3 +706,60 @@ def test_explicit_lock_capture_preserves_manual_flags(snapshot):
         not step["isManuallyLocked"] and not step["isManuallyEdited"]
         for step in cleared
     )
+
+
+@pytest.mark.parametrize(
+    ("schema", "field"),
+    [
+        (SET_PREDICTIONS_SCHEMA, "predictions"),
+        (CLEAR_PREDICTIONS_SCHEMA, "times"),
+        (SET_PLAN_STEPS_SCHEMA, "steps"),
+        (CLEAR_PLAN_STEPS_SCHEMA, "times"),
+    ],
+)
+@pytest.mark.parametrize(("month", "utc_hour"), [(1, 18), (8, 17)])
+def test_service_hours_use_configured_timezone(schema, field, month, utc_hour):
+    """Naive local hours and equivalent offset hours identify the same instant."""
+    with patch.object(dt_util, "DEFAULT_TIME_ZONE", ZoneInfo("Europe/Prague")):
+        local = datetime(2026, month, 9, 19)
+        expected = datetime(2026, month, 9, utc_hour, tzinfo=UTC)
+
+        def item(time):
+            if field == "times":
+                return time
+            if field == "predictions":
+                return {"time": time, "production_kwh": 1}
+            return {"time": time, "is_manually_locked": True}
+
+        for time in (local.isoformat(), expected.isoformat()):
+            result = schema({field: [item(time)]})[field][0]
+            parsed = result if field == "times" else result["time"]
+            assert parsed.tzinfo is not None
+            assert parsed.astimezone(UTC) == expected
+        with pytest.raises(vol.Invalid):
+            schema({field: [item(local.isoformat()), item(expected.isoformat())]})
+
+
+@pytest.mark.parametrize("field", ["consumption_kwh", "production_kwh"])
+@pytest.mark.parametrize(
+    "value", ["nan", "inf", "-inf", float("nan"), float("inf"), -float("inf")]
+)
+def test_prediction_schema_rejects_nonfinite_quantities(field, value):
+    """Invalid forecast quantities must fail before the API call."""
+    with pytest.raises(vol.Invalid):
+        SET_PREDICTIONS_SCHEMA({"predictions": [{"time": hour(), field: value}]})
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"), [(0, 0.0), ("1.25", 1.25), (None, None)]
+)
+def test_prediction_schema_accepts_finite_and_optional_quantities(value, expected):
+    """Numeric strings, zero, and an omitted forecast retain their supported meaning."""
+    parsed = SET_PREDICTIONS_SCHEMA(
+        {
+            "predictions": [
+                {"time": hour(), "consumption_kwh": value, "production_kwh": 1}
+            ]
+        }
+    )
+    assert parsed["predictions"][0]["consumption_kwh"] == expected
