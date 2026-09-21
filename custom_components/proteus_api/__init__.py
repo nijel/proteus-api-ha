@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 import logging
+from math import isfinite
 from typing import Any
 
 import aiohttp
@@ -51,6 +52,8 @@ PLATFORMS = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.SWITCH]
 def _validate_hour(value: Any) -> Any:
     """Parse a local or offset timestamp and require an hourly UTC boundary."""
     parsed = cv.datetime(value)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=dt_util.DEFAULT_TIME_ZONE)
     try:
         validate_times([dt_util.as_utc(parsed)])
     except ValueError as err:
@@ -97,12 +100,20 @@ def _has_prediction_value(prediction: dict[str, Any]) -> dict[str, Any]:
     return prediction
 
 
+def _finite_prediction(value: Any) -> float:
+    """Coerce a prediction quantity and reject values JSON cannot represent."""
+    parsed = vol.Coerce(float)(value)
+    if not isfinite(parsed):
+        raise vol.Invalid("Prediction quantities must be finite")
+    return parsed
+
+
 PREDICTION_SCHEMA = vol.All(
     vol.Schema(
         {
             vol.Required(ATTR_TIME): _validate_hour,
-            vol.Optional(ATTR_CONSUMPTION_KWH): vol.Any(None, vol.Coerce(float)),
-            vol.Optional(ATTR_PRODUCTION_KWH): vol.Any(None, vol.Coerce(float)),
+            vol.Optional(ATTR_CONSUMPTION_KWH): vol.Any(None, _finite_prediction),
+            vol.Optional(ATTR_PRODUCTION_KWH): vol.Any(None, _finite_prediction),
         }
     ),
     _has_prediction_value,
