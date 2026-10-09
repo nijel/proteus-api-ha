@@ -348,12 +348,14 @@ def parse_price_payload(prices: Any) -> dict[str, Any]:
     if not isinstance(prices, dict):
         return parsed
 
-    consumption_price = prices.get("priceConsumptionMwh")
+    consumption_price = prices.get(
+        "priceFromGridMwh", prices.get("priceConsumptionMwh")
+    )
     if isinstance(consumption_price, int | float):
         parsed["price_consumption_mwh"] = consumption_price
         parsed["price_consumption_kwh"] = round(consumption_price / 1000, 4)
 
-    production_price = prices.get("priceProductionMwh")
+    production_price = prices.get("priceToGridMwh", prices.get("priceProductionMwh"))
     if isinstance(production_price, int | float):
         parsed["price_production_mwh"] = production_price
         parsed["price_production_kwh"] = round(production_price / 1000, 4)
@@ -366,7 +368,7 @@ def parse_price_payload(prices: Any) -> dict[str, Any]:
 
         normalized_price_components = normalize_price_components(
             price_components,
-            price_mwh=prices.get("priceMwh"),
+            price_mwh=prices.get("commodityPriceFromGridMwh", prices.get("priceMwh")),
         )
         if normalized_price_components:
             parsed["price_components"] = normalized_price_components
