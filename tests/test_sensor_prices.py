@@ -36,6 +36,10 @@ async def test_price_sensors_are_created_with_expected_values(hass) -> None:
                                 "price_consumption_mwh": 8417.258278,
                                 "price_production_kwh": 3.7114,
                                 "price_production_mwh": 3711.4218,
+                                "commodity_price_from_grid_mwh": 4161.4218,
+                                "commodity_price_to_grid_mwh": 4161.4218,
+                                "consumption_prices_type": "SPOT",
+                                "production_prices_type": "SPOT",
                                 "current_command": "UP_POWER",
                                 "command_id": "command-1",
                                 "command_source": "API",
@@ -120,6 +124,8 @@ async def test_price_sensors_are_created_with_expected_values(hass) -> None:
         "poze": 0,
         "vat_rate": 0.21,
         "price_consumption_mwh": 8417.258278,
+        "commodity_price_from_grid_mwh": 4161.4218,
+        "consumption_prices_type": "SPOT",
         "price_list": [
             {"start": "2026-07-02T16:00:00.000Z", "price_kwh": 6.5941},
             {"start": "2026-07-02T17:00:00.000Z", "price_kwh": 7.4404},
@@ -131,6 +137,9 @@ async def test_price_sensors_are_created_with_expected_values(hass) -> None:
     assert production.suggested_display_precision == 2
     assert production.extra_state_attributes == {
         "price_production_mwh": 3711.4218,
+        "commodity_price_to_grid_mwh": 4161.4218,
+        "production_prices_type": "SPOT",
+        "fee_electricity_sell": 450,
         "price_list": [
             {"start": "2026-07-02T16:00:00.000Z", "price_kwh": 2.2132},
             {"start": "2026-07-02T17:00:00.000Z", "price_kwh": 2.9127},
