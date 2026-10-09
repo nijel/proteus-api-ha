@@ -652,6 +652,9 @@ class ProteusConsumptionPriceSensor(ProteusBaseSensor):
         price_consumption_mwh = self.coordinator.data.get("price_consumption_mwh")
         if price_consumption_mwh is not None:
             attributes["price_consumption_mwh"] = price_consumption_mwh
+        for key in ("commodity_price_from_grid_mwh", "consumption_prices_type"):
+            if key in self.coordinator.data:
+                attributes[key] = self.coordinator.data[key]
 
         price_list = build_price_list(
             self.coordinator.data.get("control_plan_steps"),
@@ -697,6 +700,14 @@ class ProteusProductionPriceSensor(ProteusBaseSensor):
         price_production_mwh = self.coordinator.data.get("price_production_mwh")
         if price_production_mwh is not None:
             attributes["price_production_mwh"] = price_production_mwh
+        for key in ("commodity_price_to_grid_mwh", "production_prices_type"):
+            if key in self.coordinator.data:
+                attributes[key] = self.coordinator.data[key]
+        price_components = self.coordinator.data.get("price_components") or {}
+        if "fee_electricity_sell" in price_components:
+            attributes["fee_electricity_sell"] = price_components[
+                "fee_electricity_sell"
+            ]
 
         price_list = build_price_list(
             self.coordinator.data.get("control_plan_steps"),

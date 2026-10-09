@@ -360,6 +360,22 @@ def parse_price_payload(prices: Any) -> dict[str, Any]:
         parsed["price_production_mwh"] = production_price
         parsed["price_production_kwh"] = round(production_price / 1000, 4)
 
+    for source, target in (
+        ("commodityPriceFromGridMwh", "commodity_price_from_grid_mwh"),
+        ("commodityPriceToGridMwh", "commodity_price_to_grid_mwh"),
+    ):
+        value = prices.get(source)
+        if is_number(value):
+            parsed[target] = value
+
+    for source, target in (
+        ("consumptionPricesType", "consumption_prices_type"),
+        ("productionPricesType", "production_prices_type"),
+    ):
+        value = prices.get(source)
+        if isinstance(value, str):
+            parsed[target] = value
+
     price_components = prices.get("priceComponents")
     if isinstance(price_components, dict):
         distribution_tariff_type = price_components.get("distributionTariffType")

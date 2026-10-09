@@ -271,6 +271,10 @@ def test_parses_renamed_distribution_prices() -> None:
     assert parsed["price_consumption_kwh"] == 8.1929
     assert parsed["price_production_mwh"] == 3525.9799
     assert parsed["price_production_kwh"] == 3.526
+    assert parsed["commodity_price_from_grid_mwh"] == 3975.9799
+    assert parsed["commodity_price_to_grid_mwh"] == 3975.9799
+    assert parsed["consumption_prices_type"] == "SPOT"
+    assert parsed["production_prices_type"] == "SPOT"
     assert parsed["price_components"]["price_mwh"] == 3975.9799
     assert parsed["distribution_tariff_type"] == "HT"
 
