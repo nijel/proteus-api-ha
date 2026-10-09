@@ -242,6 +242,39 @@ def test_parses_standalone_distribution_prices() -> None:
     }
 
 
+def test_parses_renamed_distribution_prices() -> None:
+    """Parse the live price response after the API renamed its fields."""
+    price = {
+        "tenantId": "TID_DELTA_GREEN",
+        "currencyCode": "CZK",
+        "priceToGridMwh": 3525.9799,
+        "priceFromGridMwh": 8192.873579,
+        "commodityPriceToGridMwh": 3975.9799,
+        "commodityPriceFromGridMwh": 3975.9799,
+        "consumptionPricesType": "SPOT",
+        "productionPricesType": "SPOT",
+        "priceComponents": {
+            "distributionPrice": 2252.45,
+            "distributionTariffType": "HT",
+            "feeElectricityBuy": 350,
+            "feeElectricitySell": 450,
+            "taxElectricity": 28.3,
+            "systemServices": 164.24,
+            "poze": 0,
+            "vatRate": 0.21,
+        },
+    }
+
+    parsed = parse_price_data([{"result": {"data": {"json": price}}}])
+
+    assert parsed["price_consumption_mwh"] == 8192.873579
+    assert parsed["price_consumption_kwh"] == 8.1929
+    assert parsed["price_production_mwh"] == 3525.9799
+    assert parsed["price_production_kwh"] == 3.526
+    assert parsed["price_components"]["price_mwh"] == 3975.9799
+    assert parsed["distribution_tariff_type"] == "HT"
+
+
 def test_schedules_prices_after_next_quarter_hour_boundary() -> None:
     """Price refreshes should align to quarter-hour tariff changes."""
     assert (
