@@ -792,11 +792,15 @@ def parse_control_plan_step(step: Any) -> dict[str, Any] | None:
         if source in metadata:
             parsed[target] = metadata[source]
 
-    price_consumption_mwh = metadata.get("priceMwhConsumption")
+    price_consumption_mwh = metadata.get(
+        "priceFromGridMwh", metadata.get("priceMwhConsumption")
+    )
     if is_number(price_consumption_mwh):
         parsed["price_consumption_kwh"] = round(price_consumption_mwh / 1000, 4)
 
-    price_production_mwh = metadata.get("priceMwhProduction")
+    price_production_mwh = metadata.get(
+        "priceToGridMwh", metadata.get("priceMwhProduction")
+    )
     if is_number(price_production_mwh):
         parsed["price_production_kwh"] = round(price_production_mwh / 1000, 4)
 

@@ -102,6 +102,31 @@ def test_parse_control_plan_step_extracts_expected_fields() -> None:
     }
 
 
+def test_parse_control_plan_step_accepts_renamed_price_fields() -> None:
+    """Steps using the renamed price fields should still expose prices."""
+    step = {
+        "id": "step-1",
+        "startAt": "2026-10-09T06:00:00.000Z",
+        "durationMinutes": 60,
+        "metadata": {
+            "flexalgoBattery": "default",
+            "flexalgoPv": "unrestricted",
+            "targetSoC": 20,
+            "priceFromGridMwh": 6780.409119,
+            "priceToGridMwh": 2367.2239,
+            "commodityPriceFromGridMwh": 2817.2239,
+            "priceComponents": {"distributionTariffType": "HT"},
+            "isPrediction": False,
+        },
+    }
+
+    parsed = parse_control_plan_step(step)
+
+    assert parsed["price_consumption_kwh"] == 6.7804
+    assert parsed["price_production_kwh"] == 2.3672
+    assert parsed["distribution_tariff_type"] == "HT"
+
+
 def test_parse_control_plan_step_returns_none_without_metadata() -> None:
     """A step without metadata should be dropped."""
     assert parse_control_plan_step({"id": "step-1"}) is None
