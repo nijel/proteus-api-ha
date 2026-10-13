@@ -112,6 +112,15 @@
       },
       "control_plan": {
         "name": "Plán řízení"
+      },
+      "flexibility_volume_up_today": {
+        "name": "Objem flexibility dnes – Dodávka do sítě"
+      },
+      "flexibility_volume_down_today": {
+        "name": "Objem flexibility dnes – Odběr ze sítě"
+      },
+      "flexibility_volume_solar_curtailment_today": {
+        "name": "Objem flexibility dnes – Zákaz přetoků"
       }
     },
     "binary_sensor": {
