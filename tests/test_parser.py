@@ -12,6 +12,7 @@ from custom_components.proteus_api.proteus_api import (
     get_seconds_until_next_price_update,
     parse_data,
     parse_price_data,
+    parse_rewards_payload,
 )
 
 
@@ -103,6 +104,27 @@ def test_sets_none_mode_for_empty_capabilities() -> None:
     parsed = parse_data(_build_payload([]))
 
     assert parsed["flexibility_mode"] == "NONE"
+
+
+def test_parses_flexibility_rewards_with_currency() -> None:
+    """Reward totals and the reported currency should be parsed."""
+    parsed = parse_rewards_payload(
+        {
+            "todayWithoutVat": 16.83345026962014,
+            "todayWithVat": 20.36847482624037,
+            "monthToDateWithVat": 102.65020095863333,
+            "totalWithVat": 3874.501859759874,
+            "currencyCode": "czk",
+        }
+    )
+
+    assert parsed == {
+        "flexibility_today": 20.37,
+        "flexibility_month": 102.65,
+        "flexibility_total": 3874.5,
+        "flexibility_currency": "CZK",
+    }
+    assert "flexibility_currency" not in parse_rewards_payload({"totalWithVat": 1})
 
 
 def test_parses_distribution_prices() -> None:

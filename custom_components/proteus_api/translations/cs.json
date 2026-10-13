@@ -71,6 +71,9 @@
       "flexibility_total": {
         "name": "Obchodování flexibility celkem"
       },
+      "flexibility_earnings_energy": {
+        "name": "Odměna za flexibilitu"
+      },
       "command": {
         "name": "Příkaz flexibility"
       },

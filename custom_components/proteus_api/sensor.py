@@ -14,12 +14,13 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfEnergy
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_point_in_time
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
-from .const import COMMAND_NONE, DISTRIBUTION_TARIFF_TYPES, DOMAIN
+from .const import COMMAND_NONE, DEFAULT_CURRENCY, DISTRIBUTION_TARIFF_TYPES, DOMAIN
 from .entity import build_device_info
 
 _LOGGER = logging.getLogger(__name__)
@@ -54,6 +55,9 @@ async def async_setup_entry(
                     coordinator, config_entry, inverter_id, inverter
                 ),
                 ProteusFlexibilityTotalSensor(
+                    coordinator, config_entry, inverter_id, inverter
+                ),
+                ProteusFlexibilityEarningsEnergySensor(
                     coordinator, config_entry, inverter_id, inverter
                 ),
                 ProteusCommandSensor(coordinator, config_entry, inverter_id, inverter),
@@ -196,12 +200,23 @@ class ProteusFlexibilityModeSensor(ProteusBaseSensor):
         }
 
 
-class ProteusFlexibilityTodaySensor(ProteusBaseSensor):
+class ProteusFlexibilityEarningsSensor(ProteusBaseSensor):
+    """Base class for flexibility earnings sensors priced in the API currency."""
+
+    _attr_device_class = SensorDeviceClass.MONETARY
+
+    @property
+    def native_unit_of_measurement(self) -> str:
+        """Return the currency reported by the API, falling back to the default."""
+        if self.coordinator.data is None:
+            return DEFAULT_CURRENCY
+        return self.coordinator.data.get("flexibility_currency") or DEFAULT_CURRENCY
+
+
+class ProteusFlexibilityTodaySensor(ProteusFlexibilityEarningsSensor):
     """Flexibility today sensor."""
 
     _attr_translation_key = "flexibility_today"
-    _attr_native_unit_of_measurement = "Kč"
-    _attr_device_class = SensorDeviceClass.MONETARY
     _attr_icon = "mdi:cash-clock"
 
     def __init__(self, coordinator, config_entry, inverter_id, inverter):
@@ -217,12 +232,10 @@ class ProteusFlexibilityTodaySensor(ProteusBaseSensor):
         return self.coordinator.data.get("flexibility_today")
 
 
-class ProteusFlexibilityMonthSensor(ProteusBaseSensor):
+class ProteusFlexibilityMonthSensor(ProteusFlexibilityEarningsSensor):
     """Flexibility month sensor."""
 
     _attr_translation_key = "flexibility_month"
-    _attr_native_unit_of_measurement = "Kč"
-    _attr_device_class = SensorDeviceClass.MONETARY
     _attr_icon = "mdi:cash"
 
     def __init__(self, coordinator, config_entry, inverter_id, inverter):
@@ -238,12 +251,11 @@ class ProteusFlexibilityMonthSensor(ProteusBaseSensor):
         return self.coordinator.data.get("flexibility_month")
 
 
-class ProteusFlexibilityTotalSensor(ProteusBaseSensor):
+class ProteusFlexibilityTotalSensor(ProteusFlexibilityEarningsSensor):
     """Flexibility total sensor."""
 
     _attr_translation_key = "flexibility_total"
-    _attr_native_unit_of_measurement = "Kč"
-    _attr_device_class = SensorDeviceClass.MONETARY
+    _attr_state_class = SensorStateClass.TOTAL
     _attr_icon = "mdi:cash-multiple"
 
     def __init__(self, coordinator, config_entry, inverter_id, inverter):
@@ -257,6 +269,36 @@ class ProteusFlexibilityTotalSensor(ProteusBaseSensor):
         if self.coordinator.data is None:
             return None
         return self.coordinator.data.get("flexibility_total")
+
+
+class ProteusFlexibilityEarningsEnergySensor(ProteusBaseSensor):
+    """Zero-energy carrier for showing flexibility earnings in the Energy dashboard.
+
+    The Energy dashboard can only attach a compensation entity to an energy
+    statistic, so this sensor stays at 0 kWh and exists purely so that the
+    flexibility earnings total can be selected as its compensation.
+    """
+
+    _attr_translation_key = "flexibility_earnings_energy"
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_state_class = SensorStateClass.TOTAL
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:lightning-bolt-circle"
+
+    def __init__(self, coordinator, config_entry, inverter_id, inverter):
+        """Initialize the sensor."""
+        super().__init__(coordinator, config_entry, inverter_id, inverter)
+        self._attr_unique_id = self._get_unique_id(
+            "proteus_flexibility_earnings_energy"
+        )
+
+    @property
+    def native_value(self) -> float | None:
+        """Return 0 kWh whenever coordinator data is available."""
+        if self.coordinator.data is None:
+            return None
+        return 0.0
 
 
 class ProteusCommandSensor(ProteusBaseSensor):

@@ -71,6 +71,9 @@
       "flexibility_total": {
         "name": "Flexibility earnings total"
       },
+      "flexibility_earnings_energy": {
+        "name": "Flexibility earnings"
+      },
       "command": {
         "name": "Flexibility command"
       },

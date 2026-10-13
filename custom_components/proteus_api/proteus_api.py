@@ -489,6 +489,10 @@ def parse_rewards_payload(rewards: Any) -> dict[str, Any]:
         if is_number(value):
             parsed[parsed_key] = round(value, 2)
 
+    currency_code = rewards.get("currencyCode")
+    if isinstance(currency_code, str) and currency_code.strip():
+        parsed["flexibility_currency"] = currency_code.strip().upper()
+
     return parsed
 
 
