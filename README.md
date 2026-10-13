@@ -51,9 +51,11 @@ Integrace automaticky objeví všechny invertory dostupné ve vašem účtu a vy
 - `sensor.proteus_flexibilita_dostupna` - Stav dostupnosti flexibility (USABLE/NOT_USABLE)
 - `sensor.proteus_rezim` - Aktuální režim (AUTOMATIC/MANUAL)
 - `sensor.proteus_rezim_flexibility` - Režim flexibility (FULL/NONE)
-- `sensor.proteus_obchodovani_flexibility_dnes` - Dnešní zisk z flexibility
-- `sensor.proteus_obchodovani_flexibility_za_mesic` - Měsíční zisk z flexibility
-- `sensor.proteus_obchodovani_flexibility_celkem` - Celkový zisk z flexibility
+- `sensor.proteus_obchodovani_flexibility_dnes` - Dnešní odměna za flexibilitu (včetně DPH)
+- `sensor.proteus_obchodovani_flexibility_za_mesic` - Měsíční odměna za flexibilitu (včetně DPH)
+- `sensor.proteus_obchodovani_flexibility_celkem` - Celková odměna za flexibilitu (včetně DPH), `state_class: total`, použitelný jako kompenzace v Energy dashboardu
+  - jednotkou všech tří je měna hlášená API (`currencyCode`, typicky `CZK`), bez ní `CZK`
+- `sensor.proteus_odmena_za_flexibilitu` - Nulový nosič (0 kWh) pro napojení odměny za flexibilitu do Energy dashboardu; jeho název se zobrazí jako řádek v přehledu zdrojů, viz níže
 - `sensor.proteus_prikaz_flexibility` - Aktuální příkaz flexibility
   - atributy: `command_id`, `command_source`, `command_start`, `command_effective_end`, `command_is_testing`, `flexibility_price_kwh`, `price_up_kwh`, `price_down_kwh`
   - `UP_POWER` - Dodávka do sítě
@@ -208,6 +210,57 @@ akce a predikční kontext v jednotkách API. Při nejasném výsledku zápisu s
 požadavek automaticky neopakuje; nejprve se načte stav serveru.
 
 Úplný seznam `steps` je dostupný v aktuálním stavu sensoru pro dashboardy a automatizace, ale neukládá se do historie recorderu kvůli jeho velikosti. Stav sensoru (počet kroků) a ostatní atributy se nadále zaznamenávají.
+
+## Odměna za flexibilitu v Energy dashboardu
+
+Odměna za flexibilitu je jedna částka za všechny vykonané povely bez ohledu na
+směr (dodávka do sítě, odběr ze sítě do baterie i zákaz přetoků). Na faktuře
+od Delta Green se objeví jako zvýhodněná cena za daný měsíc, hodnoty v
+sensorech jsou včetně DPH.
+
+Energy dashboard nemá zdroj „jen peníze": kompenzace se vždy váže na sensor
+energie v kWh a u jednoho sensoru lze zvolit buď cenu za kWh, nebo entitu s
+celkovou částkou. Skutečná dodávka do sítě už obvykle cenu za kWh má, proto
+integrace poskytuje vlastní nulový nosič `sensor.proteus_odmena_za_flexibilitu`
+(trvale 0 kWh) a sensor `sensor.proteus_obchodovani_flexibility_celkem` má
+`state_class: total`, aby pro něj Home Assistant vedl dlouhodobé statistiky.
+Objem energie pod povely je pro odměnu nepodstatný, cena se mění s každým
+povelem; dashboard bere částku přímo z celkové odměny.
+
+V Nastavení → Ovládací panely → Energie klikněte v sekci „Elektrická síť" na
+„Přidat připojení k síti" a v dialogu „Nastavit připojení k síti":
+
+1. Pole „Energie importovaná ze sítě" nechte prázdné.
+1. V části „Energie vrácená do sítě" vyberte položku **Odměna za flexibilitu**
+   (entita `sensor.proteus_odmena_za_flexibilitu`). Nabídka zobrazuje názvy a
+   pod nimi zařízení, ne ID entit; nabízí jen sensory energie v kWh, sensor s
+   odměnou tu nehledejte. Máte-li v účtu více invertorů, je položek víc se
+   stejným názvem, vyberte tu, pod kterou je uvedeno zařízení skutečně
+   řízeného invertoru (například „Solax Inverter", ne cloudové „Solax Api
+   Inverter").
+1. V části „Kompenzace exportu" přepněte volbu na „Použít entitu sledující
+   celkovou kompenzaci". Teprve potom se zobrazí pole „Entita s celkovou
+   kompenzací", kde vyberte **Obchodování flexibility celkem** (entita
+   `sensor.proteus_obchodovani_flexibility_celkem`) u stejného zařízení.
+1. „Typ měření výkonu" nechte na „Žádný senzor výkonu", nosič žádný výkon
+   nemá.
+1. Uložte.
+
+Odměna se pak zobrazí ve sloupci výnosů vedle prodeje do sítě; vazba na
+„vráceno do sítě" je jen omezení dashboardu, nic o směru povelů neříká.
+Řádek „Odměna za flexibilitu" má 0 kWh (nulový nosič) a zápornou částku, tedy výnos:
+
+![Odměna za flexibilitu v přehledu zdrojů Energy dashboardu](docs/images/energy-dashboard-flexibilita.png)
+
+Dashboard nabízí jen entity, které už mají dlouhodobé statistiky. Ty se
+počítají každých 5 minut, takže se sensory po aktualizaci integrace objeví v
+nabídce až po několika minutách. Statistiky běží od první zaznamenané
+hodnoty: ta se bere jako nulový bod, zpětně se nic nedopočítá.
+`state_class: total` (ne `total_increasing`) je zvolen proto, aby případná
+zpětná oprava částky ze strany Protea nebyla brána jako reset měřidla.
+
+Stejný sensor lze použít i mimo dashboard, například v `statistics-graph`
+nebo `apexcharts-card` se `stat_types: change` po dnech či měsících.
 
 ## Vývoj
 
