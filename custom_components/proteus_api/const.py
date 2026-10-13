@@ -73,6 +73,9 @@ PRICE_UPDATE_DELAY = 5
 
 TID_DELTA_GREEN = "TID_DELTA_GREEN"
 
+# Currency used when the API does not report one
+DEFAULT_CURRENCY = "CZK"
+
 
 def normalize_email(email: str) -> str:
     """Normalize an email address for use as a config entry unique ID."""
