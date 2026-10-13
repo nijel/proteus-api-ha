@@ -262,6 +262,36 @@ zpětná oprava částky ze strany Protea nebyla brána jako reset měřidla.
 Stejný sensor lze použít i mimo dashboard, například v `statistics-graph`
 nebo `apexcharts-card` se `stat_types: change` po dnech či měsících.
 
+### Denní objemy flexibility
+
+Integrace poskytuje tři sensory objemu flexibility v kWh s názvy povelů
+„Dodávka do sítě", „Odběr ze sítě" a „Zákaz přetoků". „Dodávka do sítě"
+znamená změnu směrem k větší dodávce do sítě nebo menšímu odběru;
+„Odběr ze sítě" znamená změnu směrem k většímu odběru ze sítě nebo menší
+dodávce. Jde o změnu chování celé domácnosti vůči síti oproti výchozímu
+stavu. Objem povelu „Odběr ze sítě" tedy nemusí znamenat nabíjení baterie.
+
+Například přechod z dodávky 10 kW na odběr 10 kW představuje změnu
+20 kW ve směru povelu „Odběr ze sítě". Pokud trvá hodinu, odpovídá objemu flexibility
+20 kWh, zatímco skutečný odběr za tuto hodinu je 10 kWh.
+
+Hodnoty pocházejí z jednotlivých povelů v
+`households.commandListWithStats` a aktualizují se každých 5 minut.
+Jde o součty za aktuální den v časovém pásmu Home Assistantu, nikoli
+o celoživotní hodnoty. Sensory používají `state_class: total` a explicitní
+denní `last_reset`, takže oprava hodnoty směrem dolů není reset měřidla.
+Při neúplné odpovědi zůstává poslední známá hodnota; po půlnoci je
+hodnota neznámá, dokud se nepodaří načíst nový den.
+
+API vrací hodnoty za domácnost. Invertory ve stejné domácnosti proto
+zobrazují stejné objemy. Statistiky se zaznamenávají od zapnutí sensorů;
+historické dny ani dodatečné opravy minulých dnů se nestahují.
+
+Tyto objemy lze zobrazit v samostatných grafech. Nejsou měřidly skutečné
+dodávky ani odběru, proto je nepoužívejte jako toky elektrické sítě
+v Energy dashboardu: zkreslily by energetickou bilanci. Pro zobrazení
+odměny v Energy dashboardu nadále používejte nulový nosič popsaný výše.
+
 ## Vývoj
 
 Projekt používá `uv` a závislosti pro testy jsou definované v `pyproject.toml`.

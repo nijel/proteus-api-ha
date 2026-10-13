@@ -22,6 +22,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import COMMAND_NONE, DEFAULT_CURRENCY, DISTRIBUTION_TARIFF_TYPES, DOMAIN
 from .entity import build_device_info
+from .volume import VOLUME_FIELDS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -96,6 +97,13 @@ async def async_setup_entry(
                     coordinator, config_entry, inverter_id, inverter
                 ),
             ]
+        )
+
+        sensors.extend(
+            ProteusFlexibilityVolumeSensor(
+                coordinator, config_entry, inverter_id, inverter, volume_key
+            )
+            for volume_key in VOLUME_FIELDS
         )
 
     async_add_entities(sensors)
@@ -299,6 +307,33 @@ class ProteusFlexibilityEarningsEnergySensor(ProteusBaseSensor):
         if self.coordinator.data is None:
             return None
         return 0.0
+
+
+class ProteusFlexibilityVolumeSensor(ProteusBaseSensor):
+    """Daily household flexibility volume relative to baseline grid behavior."""
+
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_state_class = SensorStateClass.TOTAL
+    _attr_suggested_display_precision = 3
+    _attr_icon = "mdi:lightning-bolt"
+
+    def __init__(self, coordinator, config_entry, inverter_id, inverter, volume_key):
+        """Initialize the daily sensor."""
+        super().__init__(coordinator, config_entry, inverter_id, inverter)
+        self._volume_key = volume_key
+        self._attr_translation_key = volume_key
+        self._attr_unique_id = self._get_unique_id(f"proteus_{volume_key}")
+
+    @property
+    def native_value(self) -> float | None:
+        """Return unknown until a complete daily response is available."""
+        return (self.coordinator.data or {}).get(self._volume_key)
+
+    @property
+    def last_reset(self) -> datetime | None:
+        """Identify the daily cycle without treating corrections as resets."""
+        return (self.coordinator.data or {}).get("flexibility_volume_last_reset")
 
 
 class ProteusCommandSensor(ProteusBaseSensor):

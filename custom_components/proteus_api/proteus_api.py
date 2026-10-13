@@ -17,8 +17,11 @@ import aiohttp
 from aiohttp.client_exceptions import ClientConnectionError
 from aiohttp_retry import ExponentialRetry, RetryClient
 
+from homeassistant.util import dt as dt_util
+
 from .const import (
     API_BASE_URL,
+    API_COMMAND_LIST_ENDPOINT,
     API_CONTROL_ENDPOINT,
     API_CONTROL_PLAN_ENDPOINT,
     API_ENABLED_ENDPOINT,
@@ -36,6 +39,7 @@ from .const import (
     COMMAND_NONE,
     CONTROL_PLAN_UPDATE_INTERVAL,
     FLEXIBILITY_CAPABILITIES,
+    FLEXIBILITY_VOLUME_UPDATE_INTERVAL,
     PRICE_UPDATE_DELAY,
     PRICE_UPDATE_INTERVAL,
     TID_DELTA_GREEN,
@@ -49,6 +53,7 @@ from .plan import (
     validate_capabilities,
     validate_times,
 )
+from .volume import VOLUME_FIELDS, parse_daily_volumes
 
 _LOGGER = logging.getLogger(__name__)
 _DIAGNOSTICS = logging.getLogger("custom_components.proteus_api.plan_diagnostics")
@@ -458,6 +463,11 @@ def parse_detail_payload(detail: Any) -> dict[str, Any]:
         return parsed
 
     household = detail.get("household")
+    household_id = detail.get("householdId")
+    if not household_id and isinstance(household, dict):
+        household_id = household.get("id")
+    if isinstance(household_id, str) and household_id:
+        parsed["household_id"] = household_id
     flexibility_state = (
         household.get("flexibilityState") if isinstance(household, dict) else None
     )
@@ -1021,6 +1031,9 @@ class ProteusAPI:
         self._next_price_update = 0.0
         self._last_control_plan_data: dict[str, Any] | None = None
         self._next_control_plan_update = 0.0
+        self._next_volume_update = 0.0
+        self._volume_day: datetime | None = None
+        self._last_volume_data: dict[str, Any] = {}
         self._plan_snapshot: dict[str, Any] | None = None
         self._plan_state = PlanWriteState()
         self._plan_capabilities: list[dict[str, Any]] | None = None
@@ -1374,6 +1387,16 @@ class ProteusAPI:
                     )
                     return None, False
 
+                if _LOGGER.isEnabledFor(logging.DEBUG):
+                    for index, endpoint in enumerate(endpoints):
+                        if endpoint == "inverters.flexibilityRewardsSummary":
+                            _LOGGER.debug(
+                                "Flexibility rewards response for inverter %s from %s: %s",
+                                self.inverter_id,
+                                endpoint,
+                                get_trpc_result_json(payload, index),
+                            )
+
                 keep_cached_data = False
                 rate_limit_error_messages = []
                 rate_limit_error_endpoints = []
@@ -1540,6 +1563,37 @@ class ProteusAPI:
         if self._last_control_plan_data is not None:
             self._last_control_plan_data.update(plan_status)
         data = self._parse_data(status_payload) if status_payload is not None else {}
+        household_id = (
+            data.get("household_id")
+            or (self._last_data or {}).get("household_id")
+            or (self._last_control_plan_data or {}).get("control_plan_household_id")
+        )
+        day_start = dt_util.start_of_local_day()
+        if household_id and (
+            monotonic() >= self._next_volume_update or self._volume_day != day_start
+        ):
+            self._volume_day = day_start
+            try:
+                volumes = await self.fetch_daily_volumes(household_id, day_start)
+            except ProteusConnectionError as exception:
+                _LOGGER.warning("Could not fetch flexibility volumes: %s", exception)
+                volumes = {}
+            if volumes:
+                self._last_volume_data = {
+                    **volumes,
+                    "flexibility_volume_last_reset": day_start,
+                }
+            self._next_volume_update = monotonic() + FLEXIBILITY_VOLUME_UPDATE_INTERVAL
+        volume_data = (
+            self._last_volume_data
+            if self._last_volume_data.get("flexibility_volume_last_reset") == day_start
+            else {}
+        )
+        if self._last_data is not None:
+            self._last_data = dict(self._last_data)
+            for key in (*VOLUME_FIELDS, "flexibility_volume_last_reset"):
+                self._last_data.pop(key, None)
+            self._last_data.update(volume_data)
         if data:
             if keep_cached_status and self._last_data is not None:
                 data = {**self._last_data, **data}
@@ -1547,6 +1601,7 @@ class ProteusAPI:
                 data = {**data, **self._last_price_data}
             if self._last_control_plan_data is not None:
                 data = {**data, **self._last_control_plan_data}
+            data = {**data, **volume_data}
             self._last_data = data
             return data
 
@@ -1560,6 +1615,80 @@ class ProteusAPI:
         raise ProteusConnectionError(
             "Proteus API status response did not contain usable data"
         )
+
+    async def fetch_daily_volumes(
+        self, household_id: str, day_start: datetime
+    ) -> dict[str, float]:
+        """Read daily volumes with one request using the maximum record limit."""
+        endpoint = API_COMMAND_LIST_ENDPOINT
+        if self._get_rate_limit_remaining((endpoint,)):
+            return {}
+        client = await self._get_client()
+        params = {
+            "batch": "1",
+            "input": json.dumps(
+                {
+                    "0": {
+                        "json": {
+                            "householdId": household_id,
+                            "date": day_start.isoformat(timespec="milliseconds"),
+                            "limit": 1280,
+                            "timezone": str(day_start.tzinfo),
+                            "allowedCommandTypes": None,
+                        },
+                        "meta": {
+                            "values": {
+                                "date": ["Date"],
+                                "allowedCommandTypes": ["undefined"],
+                            }
+                        },
+                    }
+                }
+            ),
+        }
+        try:
+            async with client.get(
+                f"{API_BASE_URL}{endpoint}",
+                params=params,
+                headers=self.get_headers(),
+            ) as response:
+                body = await response.text()
+                errors = get_control_plan_error_payload(
+                    body, self._parse_response_body(body)
+                )
+                retry_after = self._extract_trpc_rate_limit_retry_after(errors)
+                if response.status == TRPC_RATE_LIMIT_HTTP_STATUS or retry_after:
+                    retry_after = retry_after or UPDATE_INTERVAL
+                    self._set_rate_limit_cooldown(retry_after, (endpoint,))
+                    self._log_rate_limit(
+                        retry_after,
+                        self._extract_trpc_error_messages(errors, (endpoint,))
+                        or [f"HTTP {response.status}"],
+                        endpoint,
+                    )
+                    return {}
+                if response.status not in {
+                    200,
+                    207,
+                } or self._extract_trpc_error_messages(errors):
+                    _LOGGER.warning(
+                        "Flexibility volume request failed (HTTP %s)",
+                        response.status,
+                    )
+                    return {}
+        except (aiohttp.ClientError, OSError) as exception:
+            raise ProteusConnectionError(
+                format_connection_error(exception)
+            ) from exception
+        payload = decode_single_result(body)
+        if not isinstance(payload, dict):
+            return {}
+        if payload.get("hasMoreRecords") is True:
+            _LOGGER.warning(
+                "Flexibility command list remains truncated at the maximum limit"
+            )
+            return {}
+        return parse_daily_volumes(payload)
 
     async def _fetch_control_plan_safely(self) -> dict[str, Any]:
         """Fetch the active control plan, tolerating failures."""

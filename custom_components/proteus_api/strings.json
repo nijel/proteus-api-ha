@@ -109,6 +109,15 @@
       },
       "distribution_tariff": {
         "name": "Distribution tariff"
+      },
+      "flexibility_volume_up_today": {
+        "name": "Flexibility volume today – Grid export"
+      },
+      "flexibility_volume_down_today": {
+        "name": "Flexibility volume today – Grid import"
+      },
+      "flexibility_volume_solar_curtailment_today": {
+        "name": "Flexibility volume today – Export restriction"
       }
     },
     "binary_sensor": {

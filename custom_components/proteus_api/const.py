@@ -28,6 +28,7 @@ API_PREDICTIONS_OVERRIDE_ENDPOINT = (
 
 API_UPDATE_PLAN_ENDPOINT = "controlPlans.updateSteps"
 API_PLAN_CAPABILITIES_ENDPOINT = "inverters.resolveMissingFlexalgoCapabilities"
+API_COMMAND_LIST_ENDPOINT = "households.commandListWithStats"
 
 # Services
 SERVICE_SET_PREDICTIONS = "set_predictions"
@@ -41,6 +42,7 @@ ATTR_CONSUMPTION_KWH = "consumption_kwh"
 ATTR_PRODUCTION_KWH = "production_kwh"
 
 CONTROL_PLAN_UPDATE_INTERVAL = 15 * 60
+FLEXIBILITY_VOLUME_UPDATE_INTERVAL = 5 * 60
 
 # Control types
 CONTROL_TYPES = [

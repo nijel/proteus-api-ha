@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
 
 from custom_components.proteus_api.sensor import async_setup_entry
+from custom_components.proteus_api.volume import VOLUME_FIELDS
 from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
 from homeassistant.helpers.entity import EntityCategory
 
@@ -119,9 +121,33 @@ async def test_flexibility_earnings_default_to_czk(hass) -> None:
         by_unique_id["proteus_flexibility_total_inv-1"].native_unit_of_measurement
         == "CZK"
     )
-
     by_unique_id = await _setup_sensors(hass, None)
     assert (
         by_unique_id["proteus_flexibility_total_inv-1"].native_unit_of_measurement
         == "CZK"
     )
+
+
+@pytest.mark.asyncio
+async def test_daily_volume_sensors_have_explicit_reset(hass) -> None:
+    """Daily totals support statistics and corrections without false resets."""
+    reset = datetime(2026, 10, 12, tzinfo=UTC)
+    data = {
+        **dict.fromkeys(VOLUME_FIELDS, 1.25),
+        "flexibility_volume_last_reset": reset,
+    }
+    entities = await _setup_sensors(hass, data)
+    for key in VOLUME_FIELDS:
+        sensor = entities[f"proteus_{key}_inv-1"]
+        assert sensor.native_value == 1.25
+        assert sensor.native_unit_of_measurement == "kWh"
+        assert sensor.device_class == SensorDeviceClass.ENERGY
+        assert sensor.state_class == SensorStateClass.TOTAL
+        assert sensor.last_reset == reset
+        data[key] = 0.5
+        assert sensor.native_value == 0.5
+        assert sensor.last_reset == reset
+    empty = await _setup_sensors(hass, None)
+    for key in VOLUME_FIELDS:
+        assert empty[f"proteus_{key}_inv-1"].native_value is None
+        assert empty[f"proteus_{key}_inv-1"].last_reset is None

@@ -1,0 +1,47 @@
+{
+  "hasMoreRecords": false,
+  "records": [
+    {
+      "id": "command-0",
+      "type": "UP_POWER",
+      "volumeKwhUp": 1.3041875,
+      "volumeKwhDown": null,
+      "volumeKwhSolarCurtailment": null
+    },
+    {
+      "id": "command-1",
+      "type": "UP_POWER",
+      "volumeKwhUp": 1.5610333333333333,
+      "volumeKwhDown": null,
+      "volumeKwhSolarCurtailment": null
+    },
+    {
+      "id": "command-2",
+      "type": "UP_POWER",
+      "volumeKwhUp": 1.0964972222222222,
+      "volumeKwhDown": null,
+      "volumeKwhSolarCurtailment": null
+    },
+    {
+      "id": "command-3",
+      "type": "DOWN_BATTERY_SOLAR_CURTAILMENT_POWER",
+      "volumeKwhUp": null,
+      "volumeKwhDown": 0.37335555555555555,
+      "volumeKwhSolarCurtailment": null
+    },
+    {
+      "id": "command-4",
+      "type": "DOWN_SOLAR_CURTAILMENT_POWER",
+      "volumeKwhUp": null,
+      "volumeKwhDown": null,
+      "volumeKwhSolarCurtailment": 0.077425
+    },
+    {
+      "id": "command-5",
+      "type": "DOWN_BATTERY_SOLAR_CURTAILMENT_POWER",
+      "volumeKwhUp": null,
+      "volumeKwhDown": 0.40373055555555554,
+      "volumeKwhSolarCurtailment": null
+    }
+  ]
+}
