@@ -242,6 +242,40 @@ def test_logs_unexpected_current_flexibility_price(caplog) -> None:
     assert "'price': {'amount': 1234.5678}" in caplog.text
 
 
+@pytest.mark.parametrize(
+    "price",
+    [None, {"priceUp": None, "priceDown": None}, {"priceDown": 8.1}],
+)
+def test_does_not_warn_for_command_without_price(caplog, price) -> None:
+    """Commands without a price for their direction should not log a warning."""
+    payload = _build_payload(["UP_POWER"])
+    payload[3] = {
+        "result": {
+            "data": {
+                "json": {
+                    "command": {
+                        "type": "UP_POWER",
+                        "endAt": "2026-04-21T12:15:00+00:00",
+                    },
+                    "price": price,
+                }
+            }
+        }
+    }
+
+    with caplog.at_level(
+        logging.DEBUG, logger="custom_components.proteus_api.proteus_api"
+    ):
+        parsed = parse_data(payload)
+
+    assert parsed["current_command"] == "UP_POWER"
+    assert "flexibility_price_kwh" not in parsed
+    assert not [
+        record for record in caplog.records if record.levelno >= logging.WARNING
+    ]
+    assert "Current flexibility command UP_POWER has no price" in caplog.text
+
+
 def test_parses_standalone_distribution_prices() -> None:
     """Standalone distribution price responses should parse like batched payloads."""
     parsed = parse_price_data([_build_payload(["UP_POWER"])[5]])
