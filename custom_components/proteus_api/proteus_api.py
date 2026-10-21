@@ -424,6 +424,24 @@ def parse_flexibility_price_payload(price: Any) -> dict[str, Any]:
     return parsed
 
 
+def is_flexibility_price_missing(price: Any, command_type: str) -> bool:
+    """Return whether the API reported no price for the command direction.
+
+    Commands such as UP_POWER can come without a price (or with a null price
+    for their direction). Unknown payload shapes return False so they are
+    still reported.
+    """
+    if price is None:
+        return True
+    if not isinstance(price, dict) or not set(price) <= {"priceUp", "priceDown"}:
+        return False
+    if command_type.startswith("UP_"):
+        return price.get("priceUp") is None
+    if command_type.startswith("DOWN_"):
+        return price.get("priceDown") is None
+    return all(value is None for value in price.values())
+
+
 def select_flexibility_price(
     flexibility_price: dict[str, Any], command_type: str
 ) -> None:
@@ -589,16 +607,24 @@ def parse_command_payload(command_data: Any) -> dict[str, Any]:
     if command.get("isTesting") is not None:
         parsed["command_is_testing"] = command.get("isTesting")
 
-    flexibility_price = parse_flexibility_price_payload(command_data.get("price"))
+    price = command_data.get("price")
+    flexibility_price = parse_flexibility_price_payload(price)
     select_flexibility_price(flexibility_price, command_type)
     parsed.update(flexibility_price)
     if "flexibility_price_kwh" not in flexibility_price:
-        _LOGGER.warning(
-            "Current flexibility command payload did not contain the expected "
-            "price field for command type %s: %s",
-            command_type,
-            command_data,
-        )
+        if is_flexibility_price_missing(price, command_type):
+            _LOGGER.debug(
+                "Current flexibility command %s has no price: %s",
+                command_type,
+                price,
+            )
+        else:
+            _LOGGER.warning(
+                "Current flexibility command payload did not contain the expected "
+                "price field for command type %s: %s",
+                command_type,
+                command_data,
+            )
 
     return parsed
 
