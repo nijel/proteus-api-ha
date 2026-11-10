@@ -98,6 +98,12 @@
       "predicted_production": {
         "name": "Predicted production"
       },
+      "production_forecast_today": {
+        "name": "PV production forecast today"
+      },
+      "production_forecast_tomorrow": {
+        "name": "PV production forecast tomorrow"
+      },
       "predicted_consumption": {
         "name": "Predicted consumption"
       },

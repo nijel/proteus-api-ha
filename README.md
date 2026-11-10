@@ -15,6 +15,7 @@ Integrace pro Home Assistant umožňující ovládání a monitorování fotovol
 - **Binární sensory** - sledování stavu manuálních ovládání
 - **Přepínače** - ovládání manuálních funkcí a automatického režimu
 - **Automatická aktualizace** - data se aktualizují každých 10 sekund
+- **Předpověď FVE v panelu Energie** - hodinová předpověď výroby z Proteusu pro dnešek a zítřek, obnovovaná každých 15 minut
 
 ## Instalace
 
@@ -43,6 +44,26 @@ Integrace pro Home Assistant umožňující ovládání a monitorování fotovol
    - **E-mail a heslo**: V Proteovi musí být nastavené přihlašování heslem (ne proklikem z https://moje.deltagreen.cz/, ale vytvořením přihlašovacích údajů na https://proteus.deltagreen.cz/)
 
 Integrace automaticky objeví všechny invertory dostupné ve vašem účtu a vytvoří entity pro každý z nich.
+
+### Předpověď výroby v panelu Energie
+
+V nastavení panelu **Energie** upravte zdroj **Solární výroba** a jako předpověď
+vyberte svou integraci **Proteus API**. Předpověď se zobrazí v grafu solární výroby.
+Senzor skutečně vyrobené energie nadále poskytuje integrace vašeho střídače.
+Po aktualizaci integrace restartujte Home Assistant, aby načetl metadata
+pro nabídku předpovědí.
+
+U každého střídače jsou také senzory **Předpověď výroby FVE dnes** a
+**Předpověď výroby FVE zítra** s denním součtem v kWh a atributem `wh_hours`
+s hodinovou předpovědí ve Wh. Tyto senzory slouží k zobrazení a automatizacím;
+v nastavení předpovědi panelu Energie se vybírá celá integrace Proteus API.
+
+Předpověď pochází z `inverters.productionPredictions` a používá hodinovou energii
+v Wh. Načítá se pro dnešek a zítřek podle časového pásma Home Assistantu;
+zobrazí se intervaly, pro které Proteus vrátí data. U účtu s více střídači jde
+o součet jejich předpovědí, proto tento účet vyberte u odpovídající celkové výroby
+jen jednou. Při dočasném výpadku zůstává dostupná poslední platná předpověď
+v tomto časovém rozsahu.
 
 ## Dostupné entity
 

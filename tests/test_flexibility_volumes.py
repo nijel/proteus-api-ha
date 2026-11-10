@@ -207,6 +207,7 @@ async def test_volume_rate_limit_preserves_optional_update(monkeypatch):
 async def test_midnight_expiration_and_failed_refresh(monkeypatch, cached_status):
     """Yesterday's values disappear on a failed new-day read, without polling rapidly."""
     api = StubProteusAPI()
+    monkeypatch.setattr(api, "fetch_production_forecast", AsyncMock(return_value=None))
     api.parsed_data = {"household_id": "household", "flexibility_today": 2.0}
     fetch = AsyncMock(return_value=parse_daily_volumes(_payload(4.0)))
     monkeypatch.setattr(api, "fetch_daily_volumes", fetch)
