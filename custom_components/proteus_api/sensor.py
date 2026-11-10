@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 import logging
 from typing import Any
 
@@ -80,6 +80,12 @@ async def async_setup_entry(
                 ),
                 ProteusPredictedProductionSensor(
                     coordinator, config_entry, inverter_id, inverter
+                ),
+                ProteusProductionForecastSensor(
+                    coordinator, config_entry, inverter_id, inverter, day_offset=0
+                ),
+                ProteusProductionForecastSensor(
+                    coordinator, config_entry, inverter_id, inverter, day_offset=1
                 ),
                 ProteusPredictedConsumptionSensor(
                     coordinator, config_entry, inverter_id, inverter
@@ -672,6 +678,48 @@ class ProteusPredictedProductionSensor(ProteusBaseSensor):
         if self.coordinator.data is None:
             return None
         return self.coordinator.data.get("predicted_production")
+
+
+class ProteusProductionForecastSensor(ProteusBaseSensor):
+    """Daily forecast from the same hourly Wh data used by the Energy panel."""
+
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_suggested_display_precision = 2
+    _attr_icon = "mdi:solar-power"
+    _unrecorded_attributes = frozenset({"wh_hours"})
+
+    def __init__(
+        self, coordinator, config_entry, inverter_id, inverter, *, day_offset: int
+    ):
+        """Initialize today's or tomorrow's production forecast."""
+        super().__init__(coordinator, config_entry, inverter_id, inverter)
+        self._day_offset = day_offset
+        day = "today" if day_offset == 0 else "tomorrow"
+        self._attr_translation_key = f"production_forecast_{day}"
+        self._attr_unique_id = self._get_unique_id(f"proteus_production_forecast_{day}")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, dict[str, float]]:
+        """Return this local day's forecast intervals in Wh for inspection."""
+        day_start = dt_util.start_of_local_day() + timedelta(days=self._day_offset)
+        end = dt_util.as_utc(day_start + timedelta(days=1)).isoformat()
+        start = dt_util.as_utc(day_start).isoformat()
+        return {
+            "wh_hours": {
+                timestamp: energy
+                for timestamp, energy in (self.coordinator.data or {})
+                .get("production_forecast", {})
+                .items()
+                if start <= timestamp < end
+            }
+        }
+
+    @property
+    def native_value(self) -> float | None:
+        """Return predicted daily production in kWh, or unknown without data."""
+        hours = self.extra_state_attributes["wh_hours"]
+        return sum(hours.values()) / 1000 if hours else None
 
 
 class ProteusPredictedConsumptionSensor(ProteusBaseSensor):

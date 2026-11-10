@@ -98,6 +98,12 @@
       "predicted_production": {
         "name": "Odhad výroby"
       },
+      "production_forecast_today": {
+        "name": "Předpověď výroby FVE dnes"
+      },
+      "production_forecast_tomorrow": {
+        "name": "Předpověď výroby FVE zítra"
+      },
       "predicted_consumption": {
         "name": "Odhad spotřeby"
       },

@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 import json
 from json import JSONDecodeError
 import logging
-from math import ceil
+from math import ceil, isfinite
 import re
 from time import monotonic, time
 from typing import Any, ClassVar, TypedDict, cast
@@ -33,6 +33,7 @@ from .const import (
     API_PREDICTIONS_OVERRIDE_ENDPOINT,
     API_PRICE_ENDPOINT,
     API_PRICE_ENDPOINTS,
+    API_PRODUCTION_PREDICTIONS_ENDPOINT,
     API_STATUS_ENDPOINT,
     API_STATUS_ENDPOINTS,
     API_UPDATE_PLAN_ENDPOINT,
@@ -42,6 +43,7 @@ from .const import (
     FLEXIBILITY_VOLUME_UPDATE_INTERVAL,
     PRICE_UPDATE_DELAY,
     PRICE_UPDATE_INTERVAL,
+    PRODUCTION_FORECAST_UPDATE_INTERVAL,
     TID_DELTA_GREEN,
     UPDATE_INTERVAL,
 )
@@ -800,6 +802,29 @@ def decode_single_result(response_text: str) -> Any:
     return data.get("json") if isinstance(data, dict) and "json" in data else data
 
 
+def parse_production_forecast(payload: Any) -> dict[str, float] | None:
+    """Normalize interval starts to UTC and keep finite, nonnegative Wh values."""
+    if not isinstance(payload, list):
+        return None
+    forecast = {}
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        start = parse_optional_datetime(item.get("startAt"))
+        energy = item.get("energyWh")
+        if (
+            start is None
+            or start.tzinfo is None
+            or isinstance(energy, bool)
+            or not isinstance(energy, (int, float))
+            or not isfinite(energy)
+            or energy < 0
+        ):
+            continue
+        forecast[dt_util.as_utc(start).isoformat()] = float(energy)
+    return forecast if forecast or not payload else None
+
+
 def parse_control_plan_step(step: Any) -> dict[str, Any] | None:
     """Parse one control plan step into HA-friendly fields."""
     if not isinstance(step, dict):
@@ -1057,6 +1082,9 @@ class ProteusAPI:
         self._next_price_update = 0.0
         self._last_control_plan_data: dict[str, Any] | None = None
         self._next_control_plan_update = 0.0
+        self._next_forecast_update = 0.0
+        self._forecast_day: datetime | None = None
+        self._production_forecast: dict[str, float] = {}
         self._next_volume_update = 0.0
         self._volume_day: datetime | None = None
         self._last_volume_data: dict[str, Any] = {}
@@ -1595,6 +1623,31 @@ class ProteusAPI:
             or (self._last_control_plan_data or {}).get("control_plan_household_id")
         )
         day_start = dt_util.start_of_local_day()
+        if monotonic() >= self._next_forecast_update or self._forecast_day != day_start:
+            self._forecast_day = day_start
+            try:
+                forecast = await self.fetch_production_forecast(day_start)
+            except ProteusConnectionError as exception:
+                _LOGGER.warning("Could not fetch production forecast: %s", exception)
+                forecast = None
+            if forecast is not None:
+                self._production_forecast = forecast
+            self._next_forecast_update = monotonic() + max(
+                PRODUCTION_FORECAST_UPDATE_INTERVAL,
+                self._get_rate_limit_remaining((API_PRODUCTION_PREDICTIONS_ENDPOINT,)),
+            )
+        forecast_start = dt_util.as_utc(day_start).isoformat()
+        forecast_end = dt_util.as_utc(day_start + timedelta(days=2)).isoformat()
+        self._production_forecast = {
+            start: energy
+            for start, energy in self._production_forecast.items()
+            if forecast_start <= start < forecast_end
+        }
+        forecast_data = (
+            {"production_forecast": self._production_forecast}
+            if self._production_forecast
+            else {}
+        )
         if household_id and (
             monotonic() >= self._next_volume_update or self._volume_day != day_start
         ):
@@ -1617,6 +1670,8 @@ class ProteusAPI:
         )
         if self._last_data is not None:
             self._last_data = dict(self._last_data)
+            self._last_data.pop("production_forecast", None)
+            self._last_data.update(forecast_data)
             for key in (*VOLUME_FIELDS, "flexibility_volume_last_reset"):
                 self._last_data.pop(key, None)
             self._last_data.update(volume_data)
@@ -1627,7 +1682,7 @@ class ProteusAPI:
                 data = {**data, **self._last_price_data}
             if self._last_control_plan_data is not None:
                 data = {**data, **self._last_control_plan_data}
-            data = {**data, **volume_data}
+            data = {**data, **volume_data, **forecast_data}
             self._last_data = data
             return data
 
@@ -1641,6 +1696,64 @@ class ProteusAPI:
         raise ProteusConnectionError(
             "Proteus API status response did not contain usable data"
         )
+
+    async def fetch_production_forecast(
+        self, day_start: datetime
+    ) -> dict[str, float] | None:
+        """Fetch today's and tomorrow's production, with superjson Date inputs."""
+        endpoint = API_PRODUCTION_PREDICTIONS_ENDPOINT
+        if self._get_rate_limit_remaining((endpoint,)):
+            return None
+        client = await self._get_client()
+        params = {
+            "batch": "1",
+            "input": json.dumps(
+                {
+                    "0": {
+                        "json": {
+                            "inverterId": self.inverter_id,
+                            "from": format_prediction_time(day_start),
+                            "to": format_prediction_time(
+                                day_start + timedelta(days=2, milliseconds=-1)
+                            ),
+                        },
+                        "meta": {"values": {"from": ["Date"], "to": ["Date"]}},
+                    }
+                }
+            ),
+        }
+        try:
+            async with client.get(
+                f"{API_BASE_URL}{endpoint}", params=params, headers=self.get_headers()
+            ) as response:
+                body = await response.text()
+                errors = get_control_plan_error_payload(
+                    body, self._parse_response_body(body)
+                )
+                retry_after = self._extract_trpc_rate_limit_retry_after(errors)
+                if response.status == TRPC_RATE_LIMIT_HTTP_STATUS or retry_after:
+                    retry_after = retry_after or UPDATE_INTERVAL
+                    self._set_rate_limit_cooldown(retry_after, (endpoint,))
+                    self._log_rate_limit(
+                        retry_after,
+                        self._extract_trpc_error_messages(errors, (endpoint,))
+                        or [f"HTTP {response.status}"],
+                        endpoint,
+                    )
+                    return None
+                if response.status not in {
+                    200,
+                    207,
+                } or self._extract_trpc_error_messages(errors):
+                    _LOGGER.warning(
+                        "Production forecast request failed (HTTP %s)", response.status
+                    )
+                    return None
+        except (aiohttp.ClientError, OSError) as exception:
+            raise ProteusConnectionError(
+                format_connection_error(exception)
+            ) from exception
+        return parse_production_forecast(decode_single_result(body))
 
     async def fetch_daily_volumes(
         self, household_id: str, day_start: datetime

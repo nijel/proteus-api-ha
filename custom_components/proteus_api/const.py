@@ -22,6 +22,7 @@ API_MODE_ENDPOINT = "inverters.controls.updateControlMode"
 API_FLEXIBILITY_ENDPOINT = "inverters.controls.updateFlexibilityCapabilities"
 API_LOGIN_ENDPOINT = "users.loginWithEmailAndPassword"
 API_CONTROL_PLAN_ENDPOINT = "controlPlans.active"
+API_PRODUCTION_PREDICTIONS_ENDPOINT = "inverters.productionPredictions"
 API_PREDICTIONS_OVERRIDE_ENDPOINT = (
     "inverters.upsertMultipleInverterPredictionsOverride"
 )
@@ -42,6 +43,7 @@ ATTR_CONSUMPTION_KWH = "consumption_kwh"
 ATTR_PRODUCTION_KWH = "production_kwh"
 
 CONTROL_PLAN_UPDATE_INTERVAL = 15 * 60
+PRODUCTION_FORECAST_UPDATE_INTERVAL = 15 * 60
 FLEXIBILITY_VOLUME_UPDATE_INTERVAL = 5 * 60
 
 # Control types

@@ -275,6 +275,7 @@ class RefreshProteusAPI(ProteusAPI):
         self._rate_limited_until_by_scope = {}
         self._next_rate_limit_error_by_scope = {}
         self._next_price_update = float("inf")
+        self.fetch_production_forecast = AsyncMock(return_value=None)
         self._last_control_plan_data = {
             "control_plan_id": "old-plan",
             "control_plan_created_at": "old-date",
